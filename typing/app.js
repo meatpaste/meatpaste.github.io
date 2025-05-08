@@ -368,6 +368,57 @@ function updateSessionStats() {
     updateMetrics();
 }
 
+// --- Instructions Modal Logic ---
+document.addEventListener('DOMContentLoaded', function() {
+  const helpBtn = document.getElementById('help-btn');
+  const modal = document.getElementById('instructions-modal');
+  const closeBtn = document.getElementById('close-instructions');
+
+  function openModal() {
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-modal', 'true');
+    closeBtn.focus();
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+    modal.removeAttribute('aria-modal');
+    helpBtn.focus();
+    document.body.style.overflow = '';
+  }
+
+  if (helpBtn && modal && closeBtn) {
+    helpBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (!modal.classList.contains('hidden')) {
+        if (e.key === 'Escape') closeModal();
+        // Trap focus
+        if (e.key === 'Tab') {
+          const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+      }
+    });
+  }
+});
+
 // --- Visual Keyboard ---
 const keyRowClasses = 'flex justify-center mb-1';
 const keyBaseClasses = 'bg-white border border-gray-300 rounded m-1 px-4 py-2 min-w-[32px] text-center text-base transition-colors';
