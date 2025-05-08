@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHP Syntax Typing Tutor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>PHP Syntax Typing Tutor</h1>
+        <div id="metrics"></div>
+        <button id="reset-avg" style="margin-bottom:1rem;">Reset Average</button>
+        <div id="main-panes">
+            <div id="user-pane">
+                <h2>Your Typing</h2>
+                <pre id="user-input"></pre>
+                <textarea id="hidden-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+            </div>
+            <div id="snippet-pane">
+                <h2>PHP Snippet</h2>
+                <pre id="snippet"></pre>
+            </div>
+        </div>
+        <div id="keyboard"></div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
