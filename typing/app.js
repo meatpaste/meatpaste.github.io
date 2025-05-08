@@ -1,22 +1,5 @@
 // --- PHP Syntax Typing Tutor Core ---
 
-const phpSnippets = [
-    // Difficulty 1: Variables
-    "$foo = 42;",
-    "$bar = 'hello';",
-    "$num = $foo + 7;",
-    // Difficulty 2: Functions
-    "function greet($name) {\n    echo 'Hello, ' . $name;\n}",
-    "function add($a, $b) {\n    return $a + $b;\n}",
-    // Difficulty 3: Control structures
-    "if ($foo > 10) {\n    echo 'Big';\n} else {\n    echo 'Small';\n}",
-    "for ($i = 0; $i < 5; $i++) {\n    echo $i;\n}",
-    // Difficulty 4: Classes
-    "class Person {\n    public $name;\n    function __construct($name) {\n        $this->name = $name;\n    }\n}",
-    // Difficulty 5: Advanced
-    "$arr = [1, 2, 3];\nforeach ($arr as $item) {\n    echo $item;\n}",
-];
-
 let currentSnippet = '';
 let currentIndex = 0;
 let startTime = null;
@@ -26,6 +9,8 @@ let correctTyped = 0;
 let difficulty = 1;
 let lastInputError = false;
 
+const maxDifficulty = Object.keys(snippetsByDifficulty).length;
+
 const metricsDiv = document.getElementById('metrics');
 const snippetPre = document.getElementById('snippet');
 const userInputPre = document.getElementById('user-input');
@@ -33,11 +18,11 @@ const keyboardDiv = document.getElementById('keyboard');
 const hiddenInput = document.getElementById('hidden-input');
 
 function getSnippetsForDifficulty(level) {
-    if (level === 1) return phpSnippets.slice(0, 3);
-    if (level === 2) return phpSnippets.slice(0, 5);
-    if (level === 3) return phpSnippets.slice(0, 7);
-    if (level === 4) return phpSnippets.slice(0, 8);
-    return phpSnippets;
+    let pool = [];
+    for (let i = 1; i <= level; i++) {
+        if (snippetsByDifficulty[i]) pool = pool.concat(snippetsByDifficulty[i]);
+    }
+    return pool;
 }
 
 function pickSnippet() {
@@ -87,20 +72,34 @@ function renderUserInput() {
 
 // Stats storage
 let stats = {
-    last: { cpm: 0, accuracy: 100 },
-    average: { cpm: 0, accuracy: 100 },
-    count: 0
+    last: { cpm: 0, accuracy: 100, errors: 0, level: 1 },
+    average: { cpm: 0, accuracy: 100, errors: 0, level: 1 },
+    count: 0,
+    totalCorrect: 0,
+    totalTyped: 0
 };
+// Load stats from localStorage immediately for persistence
+loadStats();
 
 function loadStats() {
     const s = localStorage.getItem('php_typing_stats');
-    if (s) stats = JSON.parse(s);
+    if (s) {
+        const loaded = JSON.parse(s);
+        // Defensive merge for backward compatibility
+        stats = Object.assign({
+            last: { cpm: 0, accuracy: 100, errors: 0, level: 1 },
+            average: { cpm: 0, accuracy: 100, errors: 0, level: 1 },
+            count: 0,
+            totalCorrect: 0,
+            totalTyped: 0
+        }, loaded);
+    }
 }
 function saveStats() {
     localStorage.setItem('php_typing_stats', JSON.stringify(stats));
 }
 function resetStats() {
-    stats = { last: { cpm: 0, accuracy: 100 }, average: { cpm: 0, accuracy: 100 }, count: 0 };
+    stats = { last: { cpm: 0, accuracy: 100, errors: 0, level: 1 }, average: { cpm: 0, accuracy: 100, errors: 0, level: 1 }, count: 0, totalCorrect: 0, totalTyped: 0 };
     saveStats();
     updateMetrics();
 }
@@ -109,16 +108,37 @@ function updateMetrics() {
     const elapsed = startTime ? (Date.now() - startTime) / 1000 : 0;
     const cpm = elapsed > 0 ? ((correctTyped) / (elapsed / 60)).toFixed(1) : '0.0';
     const accuracy = totalTyped > 0 ? ((correctTyped / totalTyped) * 100).toFixed(1) : '100.0';
+    const avgAccuracy = stats.totalTyped > 0 ? ((stats.totalCorrect / stats.totalTyped) * 100).toFixed(1) : '100.0';
     metricsDiv.innerHTML = `
-        <div>CPM: <strong>${cpm}</strong></div>
-        <div>Accuracy: <strong>${accuracy}%</strong></div>
-        <div>Errors: <strong>${errors}</strong></div>
-        <div>Level: <strong>${difficulty}</strong></div>
-        <hr style="margin:8px 0;">
-        <div>Last Test CPM: <strong>${stats.last.cpm}</strong></div>
-        <div>Last Test Accuracy: <strong>${stats.last.accuracy}%</strong></div>
-        <div>Average CPM: <strong>${stats.average.cpm}</strong></div>
-        <div>Average Accuracy: <strong>${stats.average.accuracy}%</strong></div>
+      <div class="overflow-x-auto mb-4">
+        <table class="table-auto w-full text-left border border-gray-300">
+          <thead>
+            <tr>
+              <th class="px-2 border-b border-gray-300"></th>
+              <th class="px-2 border-b border-gray-300">CPM</th>
+              <th class="px-2 border-b border-gray-300">Accuracy</th>
+              <th class="px-2 border-b border-gray-300">Errors</th>
+              <th class="px-2 border-b border-gray-300">Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th class="font-medium px-2 border-t border-gray-300">Last</th>
+              <td class="px-2 border-t border-gray-300">${stats.last.cpm}</td>
+              <td class="px-2 border-t border-gray-300">${stats.last.accuracy}%</td>
+              <td class="px-2 border-t border-gray-300">${stats.last.errors}</td>
+              <td class="px-2 border-t border-gray-300">${stats.last.level}</td>
+            </tr>
+            <tr>
+              <th class="font-medium px-2 border-t border-gray-300">Average (${stats.count})</th>
+              <td class="px-2 border-t border-gray-300">${stats.average.cpm}</td>
+              <td class="px-2 border-t border-gray-300">${avgAccuracy}%</td>
+              <td class="px-2 border-t border-gray-300">${(stats.average.errors ?? 0).toFixed(1)}</td>
+              <td class="px-2 border-t border-gray-300">${(stats.average.level ?? 1).toFixed(1)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     `;
 }
 
@@ -185,27 +205,45 @@ function handleInput(e) {
         const cpm = elapsed > 0 ? ((correctTyped) / (elapsed / 60)) : 0;
         const accuracy = totalTyped > 0 ? ((correctTyped / totalTyped) * 100) : 100;
         // Update stats
-        stats.last = { cpm: Math.round(cpm), accuracy: Math.round(accuracy) };
+        stats.last = { cpm: Math.round(cpm), accuracy: Math.round(accuracy), errors: errors, level: difficulty };
         if (stats.count === 0) {
-            stats.average = { cpm: Math.round(cpm), accuracy: Math.round(accuracy) };
+            stats.average = { cpm: Math.round(cpm), accuracy: Math.round(accuracy), errors: errors, level: difficulty };
         } else {
             stats.average.cpm = Math.round((stats.average.cpm * stats.count + cpm) / (stats.count + 1));
-            stats.average.accuracy = Math.round((stats.average.accuracy * stats.count + accuracy) / (stats.count + 1));
+            stats.average.errors = (stats.average.errors * stats.count + errors) / (stats.count + 1);
+            stats.average.level = (stats.average.level * stats.count + difficulty) / (stats.count + 1);
         }
+        // Update cumulative totals for mathematically correct average accuracy
+        stats.totalCorrect += correctTyped;
+        stats.totalTyped += totalTyped;
         stats.count++;
         saveStats();
         updateMetrics();
-        // Level up if accuracy is high
-        if (difficulty < 5 && (correctTyped / totalTyped) > 0.96) difficulty++;
+        // Emit confetti at cursor on completion
+        (function(){
+          const cursorEl = document.querySelector('#user-input .typing-cursor');
+          if (cursorEl) {
+            const rect = cursorEl.getBoundingClientRect();
+            confetti({
+              particleCount: 100,
+              spread: 60,
+              startVelocity: 20,
+              origin: { x: ((rect.left + rect.right) / 2) / window.innerWidth, y: rect.bottom / window.innerHeight }
+            });
+          }
+        })();
+        if (difficulty < maxDifficulty && (correctTyped / totalTyped) > 0.96) difficulty++;
         setTimeout(resetSession, 900);
     }
 } 
 
 // --- Visual Keyboard ---
+const keyRowClasses = 'flex justify-center mb-1';
+const keyBaseClasses = 'bg-gray-200 border border-gray-300 rounded m-1 px-4 py-2 min-w-[32px] text-center text-base transition-colors';
 const keyboardLayout = [
-    ['`', '1','2','3','4','5','6','7','8','9','0','-','=', 'Backspace'],
+    ['`', '1','2','3','4','5','6','7','8','9','0','-','=', '<='],
     ['Tab','q','w','e','r','t','y','u','i','o','p','[',']','\\'],
-    ['CapsLock','a','s','d','f','g','h','j','k','l',';','\'','Enter'],
+    ['⇪','a','s','d','f','g','h','j','k','l',';','\'','Enter'],
     ['Shift','z','x','c','v','b','n','m',',','.','/','Shift'],
     [' ']
 ];
@@ -214,10 +252,10 @@ function renderKeyboard() {
     keyboardDiv.innerHTML = '';
     keyboardLayout.forEach(row => {
         const rowDiv = document.createElement('div');
-        rowDiv.className = 'key-row';
+        rowDiv.className = keyRowClasses;
         row.forEach(key => {
             const keyDiv = document.createElement('div');
-            keyDiv.className = 'key';
+            keyDiv.className = keyBaseClasses;
             keyDiv.textContent = key === ' ' ? 'Space' : key;
             keyDiv.dataset.key = key;
             rowDiv.appendChild(keyDiv);
@@ -227,13 +265,13 @@ function renderKeyboard() {
 }
 
 function highlightKeyboard() {
-    document.querySelectorAll('.key').forEach(k => k.classList.remove('active', 'next', 'error'));
+    document.querySelectorAll('[data-key]').forEach(k => k.className = keyBaseClasses);
     const nextChar = currentSnippet[currentIndex] || '';
     let key = nextChar;
     if (key === '\n') key = 'Enter';
     if (key === ' ') key = ' ';
-    const keyDiv = Array.from(document.querySelectorAll('.key')).find(k => k.dataset.key === key);
-    if (keyDiv) keyDiv.classList.add('next');
+    const keyDiv = Array.from(document.querySelectorAll('[data-key]')).find(k => k.dataset.key === key);
+    if (keyDiv) keyDiv.classList.add('bg-yellow-300', 'border-yellow-400');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -282,6 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentSnippet.slice(currentIndex, currentIndex + 4) === '    ') {
                 userTyped += '    ';
                 correctTyped += 4;
+                totalTyped += 4;
                 currentIndex += 4;
                 lastInputError = false;
             } else {
@@ -327,17 +366,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const cpm = elapsed > 0 ? ((correctTyped) / (elapsed / 60)) : 0;
             const accuracy = totalTyped > 0 ? ((correctTyped / totalTyped) * 100) : 100;
             // Update stats
-            stats.last = { cpm: Math.round(cpm), accuracy: Math.round(accuracy) };
+            stats.last = { cpm: Math.round(cpm), accuracy: Math.round(accuracy), errors: errors, level: difficulty };
             if (stats.count === 0) {
-                stats.average = { cpm: Math.round(cpm), accuracy: Math.round(accuracy) };
+                stats.average = { cpm: Math.round(cpm), accuracy: Math.round(accuracy), errors: errors, level: difficulty };
             } else {
                 stats.average.cpm = Math.round((stats.average.cpm * stats.count + cpm) / (stats.count + 1));
                 stats.average.accuracy = Math.round((stats.average.accuracy * stats.count + accuracy) / (stats.count + 1));
+                stats.average.errors = (stats.average.errors * stats.count + errors) / (stats.count + 1);
+                stats.average.level = (stats.average.level * stats.count + difficulty) / (stats.count + 1);
             }
             stats.count++;
             saveStats();
             updateMetrics();
-            if (difficulty < 5 && (correctTyped / totalTyped) > 0.96) difficulty++;
+            // Emit confetti at cursor on completion
+            (function(){
+              const cursorEl = document.querySelector('#user-input .typing-cursor');
+              if (cursorEl) {
+                const rect = cursorEl.getBoundingClientRect();
+                confetti({
+                  particleCount: 100,
+                  spread: 60,
+                  startVelocity: 20,
+                  origin: { x: ((rect.left + rect.right) / 2) / window.innerWidth, y: rect.bottom / window.innerHeight }
+                });
+              }
+            })();
+            if (difficulty < maxDifficulty && (correctTyped / totalTyped) > 0.96) difficulty++;
             setTimeout(resetSession, 900);
         }
     }
