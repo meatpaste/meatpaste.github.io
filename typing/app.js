@@ -253,6 +253,32 @@ const keyboardLayout = [
     [' ']
 ];
 
+// Map of key to shifted symbol (US Standard)
+const shiftedSymbols = {
+    '`': '~',
+    '1': '!',
+    '2': '@',
+    '3': '#',
+    '4': '$',
+    '5': '%',
+    '6': '^',
+    '7': '&',
+    '8': '*',
+    '9': '(',
+    '0': ')',
+    '-': '_',
+    '=': '+',
+    '[': '{',
+    ']': '}',
+    '\\': '|',
+    ';': ':',
+    "'": '"',
+    ',': '<',
+    '.': '>',
+    '/': '?',
+};
+
+
 function renderKeyboard() {
     keyboardDiv.innerHTML = '';
     keyboardLayout.forEach(row => {
@@ -261,7 +287,13 @@ function renderKeyboard() {
         row.forEach(key => {
             const keyDiv = document.createElement('div');
             keyDiv.className = keyBaseClasses;
-            keyDiv.textContent = key === ' ' ? 'Space' : key;
+            if (key === ' ') {
+                keyDiv.textContent = 'Space';
+            } else if (shiftedSymbols[key]) {
+                keyDiv.innerHTML = `<div><span class='block text-xs text-gray-500'>${shiftedSymbols[key]}</span><span>${key}</span></div>`;
+            } else {
+                keyDiv.textContent = key;
+            }
             keyDiv.dataset.key = key;
             rowDiv.appendChild(keyDiv);
         });
