@@ -130,7 +130,7 @@ function updateMetrics() {
               <td class="px-2 border-t border-gray-300">${stats.last.level}</td>
             </tr>
             <tr>
-              <th class="font-medium px-2 border-t border-gray-300">Average (${stats.count})</th>
+              <th class="font-medium px-2 border-t border-gray-300">Average (${stats.count}) <button id="reset-avg" title="Reset average" style="background:none;border:none;padding:0;margin-left:0.3em;vertical-align:middle;cursor:pointer;"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></th>
               <td class="px-2 border-t border-gray-300">${stats.average.cpm}</td>
               <td class="px-2 border-t border-gray-300">${avgAccuracy}%</td>
               <td class="px-2 border-t border-gray-300">${(stats.average.errors ?? 0).toFixed(1)}</td>
@@ -140,6 +140,11 @@ function updateMetrics() {
         </table>
       </div>
     `;
+    // Attach event listener to the new trash icon button
+    const resetBtn = document.getElementById('reset-avg');
+    if (resetBtn) {
+      resetBtn.onclick = resetStats;
+    }
 }
 
 function resetSession() {
