@@ -6,10 +6,8 @@ This document describes the actual behavior and features of the PHP Syntax Typin
 ---
 
 ## 1. File Structure
-- `index.html`: Main HTML file, UI layout, includes scripts and modal for instructions.
-- `app.js`: Core game logic, user interaction, stats, rendering, and progression.
-- `snippets.js`: Contains the PHP code snippets for each difficulty level.
-
+The game should be entirely contained in ./typing-vue
+The game will be hosted on Github Pages, only use code and techniques compatible with this platform.
 ---
 
 ## 2. User Interface (UI)
