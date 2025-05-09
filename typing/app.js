@@ -354,8 +354,8 @@ function updateSessionStats() {
     stats.totalTyped += totalTyped;
     stats.count++;
 
-    // Level up logic: require N consecutive 100% passes (N = difficulty)
-    if (accuracy === 100) {
+    // Level up logic: require N consecutive passes with at least 90% accuracy (N = difficulty)
+    if (accuracy >= 90) {
         levelUpProgress++;
         if (levelUpProgress >= difficulty && difficulty < maxDifficulty) {
             difficulty++;
