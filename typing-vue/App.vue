@@ -102,12 +102,12 @@ function handleInput(input) {
   saveStats();
   // Check for completion
   if (input === currentSnippet.value) {
+    showConfetti(); // Always show confetti on snippet completion
     if (accuracy.value >= 90) {
       streak.value++;
       if (streak.value >= level.value) {
         level.value++;
         streak.value = 0;
-        showConfetti();
       }
     } else {
       streak.value = 0;

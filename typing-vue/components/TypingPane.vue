@@ -1,10 +1,10 @@
 <template>
-  <div class="flex-1 bg-white rounded shadow p-4 min-h-[180px] relative" @click="focusInput">
+  <div class="flex-1 bg-white rounded shadow p-4 min-h-[180px] relative" :class="{ 'flash-error': flashError }" @click="focusInput">
     <div class="text-gray-700 text-lg whitespace-pre-wrap min-h-[100px]">
-      <span v-for="(char, i) in displayChars" :key="i" :class="char.class">
-        {{ char.char }}
+      <span v-for="(item, i) in displayChars" :key="i">
+        <span v-if="item.isCursor && isFocused" class="blinking-cursor">|</span>
+        <span v-else :class="item.class">{{ item.char }}</span>
       </span>
-      <span v-if="showCursor && currentIndex === userInput.length" class="blinking-cursor">|</span>
     </div>
     <textarea
       ref="inputRef"
@@ -12,6 +12,8 @@
       class="absolute opacity-0 w-0 h-0"
       @input="emitInput"
       @keydown="onKeydown"
+      @focus="isFocused = true"
+      @blur="isFocused = false"
       autocomplete="off"
       autocorrect="off"
       spellcheck="false"
@@ -31,6 +33,7 @@ const props = defineProps({
 const emit = defineEmits(['input', 'reset']);
 const inputRef = ref(null);
 const inputValue = ref(props.userInput);
+const isFocused = ref(true);
 
 watch(() => props.userInput, (val) => {
   inputValue.value = val;
@@ -44,21 +47,64 @@ function onKeydown(e) {
   if (e.key === 'Escape') {
     emit('reset');
     setTimeout(() => inputRef.value && inputRef.value.focus(), 0);
+    return;
   } else if (e.key === 'Tab') {
     e.preventDefault();
-    const textarea = inputRef.value;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    inputValue.value =
-      inputValue.value.substring(0, start) +
-      '    ' +
-      inputValue.value.substring(end);
-    // Move caret after inserted spaces
-    nextTick(() => {
-      textarea.selectionStart = textarea.selectionEnd = start + 4;
-    });
-    emit('input', inputValue.value);
+    // Only allow if next 4 snippet chars are all spaces
+    const expected = (props.snippet || '').substr(props.currentIndex, 4);
+    if (expected === '    ') {
+      const textarea = inputRef.value;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      inputValue.value =
+        inputValue.value.substring(0, start) +
+        '    ' +
+        inputValue.value.substring(end);
+      // Move caret after inserted spaces
+      nextTick(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + 4;
+      });
+      emit('input', inputValue.value);
+    } else {
+      flashErrorNow();
+    }
+    return;
   }
+
+  // Allow navigation and editing keys
+  const allowed = [
+    'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+    'Home', 'End', 'Control', 'Meta', 'Alt', 'Shift', 'CapsLock', 'Enter'
+  ];
+  if (allowed.includes(e.key)) return;
+
+  // If Enter is expected
+  if (e.key === 'Enter') {
+    if ((props.snippet[props.currentIndex] || '') === '\n') return;
+    e.preventDefault();
+    flashErrorNow();
+    return;
+  }
+
+  // Check if the key matches the next snippet character
+  const expectedChar = props.snippet[props.currentIndex] || '';
+  let pressedChar = e.key;
+  // Handle space
+  if (pressedChar === ' ') pressedChar = ' ';
+  // Handle special printable characters
+  if (pressedChar.length === 1 && pressedChar === expectedChar) {
+    // Allow
+    return;
+  } else {
+    e.preventDefault();
+    flashErrorNow();
+  }
+}
+
+const flashError = ref(false);
+function flashErrorNow() {
+  flashError.value = true;
+  setTimeout(() => { flashError.value = false; }, 150);
 }
 
 function focusInput() {
@@ -69,15 +115,23 @@ const displayChars = computed(() => {
   const arr = [];
   const user = props.userInput || '';
   const target = props.snippet || '';
-  for (let i = 0; i < target.length; i++) {
+  const len = Math.max(user.length, target.length);
+  for (let i = 0; i < len; i++) {
+    // Insert cursor at caret position
+    if (i === props.currentIndex) {
+      arr.push({ isCursor: true });
+    }
     let char = user[i] || '';
     let className = '';
-    if (i < user.length) {
+    if (i < user.length && i < target.length) {
       if (char === target[i]) className = 'typed-correct';
       else className = 'typed-error';
     }
-    if (i === props.currentIndex) className += ' current';
-    arr.push({ char: char || ' ', class: className.trim() });
+    arr.push({ char: char || (i < target.length ? ' ' : ''), class: className });
+  }
+  // If caret is at the end, show cursor at the end
+  if (props.currentIndex === len) {
+    arr.push({ isCursor: true });
   }
   return arr;
 });
@@ -97,5 +151,13 @@ onMounted(() => {
 }
 .typed-correct { color: #059669; }
 .typed-error { color: #dc2626; background: #fee2e2; }
-.current { text-decoration: underline; }
+.flash-error {
+  animation: flash-bg 0.15s;
+  box-shadow: 0 0 0 2px #dc2626, 0 2px 8px #fecaca;
+}
+@keyframes flash-bg {
+  0% { background: #fee2e2; }
+  100% { background: white; }
+}
+
 </style>
