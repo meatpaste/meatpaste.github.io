@@ -13,5 +13,4 @@ const props = defineProps({
   errors: Number,
   level: Number,
 });
-console.log('Metrics errors prop:', props.errors);
 </script>

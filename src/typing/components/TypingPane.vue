@@ -67,7 +67,6 @@ function onKeydown(e) {
       emit('input', inputValue.value);
     } else {
       flashErrorNow();
-      console.log('emit error');
       emit('error');
     }
     return;

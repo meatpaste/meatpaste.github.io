@@ -51,7 +51,6 @@ const errors = ref(0); // Deprecated: was per-input error count
 const totalErrorCount = ref(0); // New: running total of errors
 const errorsForMetrics = computed(() => totalErrorCount.value);
 function incrementTotalErrors() {
-  console.log('incrementTotalErrors');
   totalErrorCount.value++;
 }
 const keyStats = ref({});
