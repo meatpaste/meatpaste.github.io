@@ -6,7 +6,7 @@ This document describes the actual behavior and features of the PHP Syntax Typin
 ---
 
 ## 1. File Structure
-The game should be entirely contained in ./typing-vue
+The game should be entirely contained in ./src/typing
 The game will be hosted on Github Pages, only use code and techniques compatible with this platform.
 ---
 

@@ -7,10 +7,11 @@
   </div>
 </template>
 <script setup>
-defineProps({
+const props = defineProps({
   wpm: Number,
   accuracy: Number,
   errors: Number,
   level: Number,
 });
+console.log('Metrics errors prop:', props.errors);
 </script>

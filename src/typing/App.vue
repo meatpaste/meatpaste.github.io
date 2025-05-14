@@ -6,7 +6,8 @@
     </header>
     <main class="flex-1 flex flex-col items-center justify-center p-4">
       <ProgressBars :level="level" :streak="streak" :maxLevel="maxLevel" :streakGoal="level" />
-      <Metrics :wpm="cpm" :accuracy="accuracy" :errors="errors" :level="level" />
+
+      <Metrics :wpm="cpm" :accuracy="accuracy" :errors="errorsForMetrics" :level="level" />
       <div class="flex w-full max-w-4xl mt-6 gap-6 flex-col md:flex-row">
         <TypingPane
           :userInput="userInput"
@@ -16,6 +17,8 @@
           :showCursor="showCursor"
           @input="handleInput"
           @reset="resetInput"
+          @error="incrementTotalErrors"
+          @keyevent="handleKeyEvent"
         />
         <SnippetPane :snippet="currentSnippet" />
       </div>
@@ -28,7 +31,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import ProgressBars from './components/ProgressBars.vue';
 import Metrics from './components/Metrics.vue';
 import TypingPane from './components/TypingPane.vue';
@@ -44,8 +47,33 @@ const streak = ref(0);
 const maxLevel = 50;
 const cpm = ref(0);
 const accuracy = ref(100);
-const errors = ref(0);
+const errors = ref(0); // Deprecated: was per-input error count
+const totalErrorCount = ref(0); // New: running total of errors
+const errorsForMetrics = computed(() => totalErrorCount.value);
+function incrementTotalErrors() {
+  console.log('incrementTotalErrors');
+  totalErrorCount.value++;
+}
 const keyStats = ref({});
+let snippetTotal = 0;
+let snippetErrors = 0;
+
+function handleKeyEvent({ expected, actual }) {
+  if (!expected) return; // ignore events with no expected char (e.g. after end of snippet)
+  const key = encodeURIComponent(expected);
+  if (!keyStats.value[key]) keyStats.value[key] = { total: 0, errors: 0, accuracy: 100 };
+  keyStats.value[key].total++;
+  snippetTotal++;
+  if (actual !== expected) {
+    keyStats.value[key].errors++;
+    snippetErrors++;
+  }
+  keyStats.value[key].accuracy = Math.round(100 * (1 - keyStats.value[key].errors / keyStats.value[key].total));
+  // Update snippet accuracy for metrics
+  let snippetAccuracy = snippetTotal > 0 ? Math.round(100 * (1 - snippetErrors / snippetTotal)) : 100;
+  accuracy.value = snippetAccuracy;
+  saveStats();
+}
 const userInput = ref('');
 const currentSnippet = ref('');
 const errorIndexes = ref([]);
@@ -72,38 +100,32 @@ function pickSnippet() {
   showCursor.value = true;
   startTime = null;
   charsTyped = 0;
+  prevInputLength.value = 0;
+  snippetTotal = 0;
+  snippetErrors = 0;
 }
 
+const prevInputLength = ref(0);
 function handleInput(input) {
   if (!startTime) startTime = Date.now();
   userInput.value = input;
   charsTyped = input.length;
+  // errorIndexes and currentIndex for UI feedback
   let errorsArr = [];
-  let correctChars = 0;
   for (let i = 0; i < input.length; i++) {
     if (input[i] !== currentSnippet.value[i]) errorsArr.push(i);
-    else correctChars++;
   }
   errorIndexes.value = errorsArr;
   currentIndex.value = input.length;
-  errors.value = errorsArr.length;
   // Metrics
   let elapsed = (Date.now() - startTime) / 60000;
   cpm.value = Math.round(charsTyped / (elapsed || 1));
-  accuracy.value = input.length ? Math.round((correctChars / input.length) * 100) : 100;
-  // Per-key stats
-  for (let i = 0; i < input.length; i++) {
-    let char = input[i];
-    if (!keyStats.value[char]) keyStats.value[char] = { correct: 0, total: 0, accuracy: 100 };
-    keyStats.value[char].total++;
-    if (input[i] === currentSnippet.value[i]) keyStats.value[char].correct++;
-    keyStats.value[char].accuracy = Math.round((keyStats.value[char].correct / keyStats.value[char].total) * 100);
-  }
-  saveStats();
-  // Check for completion
+  // Completion logic
   if (input === currentSnippet.value) {
-    showConfetti(); // Always show confetti on snippet completion
-    if (accuracy.value >= 90) {
+    // On completion, use snippet accuracy for streak logic
+    let snippetAccuracy = snippetTotal > 0 ? Math.round(100 * (1 - snippetErrors / snippetTotal)) : 100;
+    showConfetti();
+    if (snippetAccuracy >= 90) {
       streak.value++;
       if (streak.value >= level.value) {
         level.value++;
@@ -114,15 +136,15 @@ function handleInput(input) {
     }
     pickSnippet();
   }
-  // If any error, reset streak
-  if (errorsArr.length > 0) streak.value = 0;
-  saveStats();
 }
 
 function resetInput() {
   userInput.value = '';
   errorIndexes.value = [];
   currentIndex.value = 0;
+  prevInputLength.value = 0;
+  snippetTotal = 0;
+  snippetErrors = 0;
 }
 
 function resetStats() {
@@ -132,6 +154,7 @@ function resetStats() {
   accuracy.value = 100;
   errors.value = 0;
   keyStats.value = {};
+  totalErrorCount.value = 0;
   saveStats();
   pickSnippet();
 }
@@ -141,6 +164,7 @@ function saveStats() {
     level: level.value,
     streak: streak.value,
     keyStats: keyStats.value,
+    totalErrorCount: totalErrorCount.value,
   }));
 }
 
@@ -152,6 +176,7 @@ function loadStats() {
       level.value = parsed.level || 1;
       streak.value = parsed.streak || 0;
       keyStats.value = parsed.keyStats || {};
+      totalErrorCount.value = parsed.totalErrorCount || 0;
     } catch {}
   }
 }

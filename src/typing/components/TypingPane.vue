@@ -30,7 +30,7 @@ const props = defineProps({
   currentIndex: Number,
   showCursor: Boolean
 });
-const emit = defineEmits(['input', 'reset']);
+const emit = defineEmits(['input', 'reset', 'error']);
 const inputRef = ref(null);
 const inputValue = ref(props.userInput);
 const isFocused = ref(true);
@@ -67,6 +67,8 @@ function onKeydown(e) {
       emit('input', inputValue.value);
     } else {
       flashErrorNow();
+      console.log('emit error');
+      emit('error');
     }
     return;
   }
@@ -83,12 +85,15 @@ function onKeydown(e) {
     if ((props.snippet[props.currentIndex] || '') === '\n') return;
     e.preventDefault();
     flashErrorNow();
+    emit('error');
     return;
   }
 
   // Check if the key matches the next snippet character
   const expectedChar = props.snippet[props.currentIndex] || '';
   let pressedChar = e.key;
+  // Always emit keyevent for stats tracking
+  emit('keyevent', { expected: expectedChar, actual: pressedChar });
   // Handle space
   if (pressedChar === ' ') pressedChar = ' ';
   // Handle special printable characters
@@ -98,6 +103,7 @@ function onKeydown(e) {
   } else {
     e.preventDefault();
     flashErrorNow();
+    emit('error');
   }
 }
 
