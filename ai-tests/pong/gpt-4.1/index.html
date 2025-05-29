@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2 Player Fancy Pong</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(ellipse at center, #222 0%, #111 100%);
+      overflow: hidden;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    .container {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .scoreboard {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2.5rem;
+      color: #fff;
+      text-shadow: 0 0 20px #0ff, 0 0 10px #fff;
+      margin-bottom: 10px;
+      letter-spacing: 1.5rem;
+      user-select: none;
+    }
+    .reset-btn {
+      background: linear-gradient(90deg, #0ff, #08f);
+      border: none;
+      color: #fff;
+      padding: 10px 30px;
+      font-size: 1.2rem;
+      border-radius: 30px;
+      box-shadow: 0 0 15px #0ffb, 0 0 5px #08f;
+      cursor: pointer;
+      margin-bottom: 20px;
+      transition: background 0.2s;
+    }
+    .reset-btn:hover {
+      background: linear-gradient(90deg, #08f, #0ff);
+    }
+    canvas {
+      background: transparent;
+      display: block;
+      margin: 0 auto;
+      border-radius: 16px;
+      box-shadow: 0 0 40px 10px #08ffff55;
+    }
+    .instructions {
+      color: #aaa;
+      font-size: 1.1rem;
+      margin-top: 12px;
+      text-align: center;
+      text-shadow: 0 0 5px #000;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="scoreboard" id="scoreboard">0 : 0</div>
+    <button class="reset-btn" id="resetBtn">RESET</button>
+    <canvas id="pong" width="900" height="600"></canvas>
+    <div class="instructions">
+      <b>Player 1:</b> W/S &nbsp; | &nbsp; <b>Player 2:</b> ↑/↓<br>
+      First to 10 wins. Enjoy the glow!
+    </div>
+  </div>
+  <script>
+    // --- CONFIG ---
+    const canvas = document.getElementById('pong');
+    const ctx = canvas.getContext('2d');
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+    const PADDLE_WIDTH = 18;
+    const PADDLE_HEIGHT = 110;
+    const BALL_RADIUS = 14;
+    const PADDLE_SPEED = 7;
+    const BALL_SPEED = 7;
+    const MAX_SCORE = 10;
+    const TRAIL_LENGTH = 18;
+    
+    // --- GAME STATE ---
+    let paddles = [
+      { x: 30, y: HEIGHT/2 - PADDLE_HEIGHT/2, vy: 0, color: '#0ff' }, // Left
+      { x: WIDTH - 30 - PADDLE_WIDTH, y: HEIGHT/2 - PADDLE_HEIGHT/2, vy: 0, color: '#f0f' } // Right
+    ];
+    let ball = {
+      x: WIDTH/2, y: HEIGHT/2,
+      vx: BALL_SPEED * (Math.random() > 0.5 ? 1 : -1),
+      vy: BALL_SPEED * (Math.random()*2-1),
+      color: '#fff',
+      trail: []
+    };
+    let scores = [0, 0];
+    let keys = {};
+    let running = true;
+    let winner = null;
+    
+    // --- DRAW HELPERS ---
+    function drawPaddle(p, glowColor) {
+      ctx.save();
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 24;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, PADDLE_WIDTH, PADDLE_HEIGHT);
+      ctx.restore();
+      // Add a neon edge
+      ctx.save();
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 12;
+      ctx.strokeRect(p.x, p.y, PADDLE_WIDTH, PADDLE_HEIGHT);
+      ctx.restore();
+    }
+    function drawBall(b) {
+      // Draw trail
+      for (let i = b.trail.length - 1; i >= 0; i--) {
+        let t = b.trail[i];
+        let alpha = (i+1) / b.trail.length * 0.6;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, BALL_RADIUS * (0.7 + 0.3*i/b.trail.length), 0, Math.PI*2);
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+        ctx.shadowColor = '#0ff';
+        ctx.shadowBlur = 18 * alpha;
+        ctx.fill();
+        ctx.restore();
+      }
+      // Main ball
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, BALL_RADIUS, 0, Math.PI*2);
+      ctx.fillStyle = b.color;
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 30;
+      ctx.fill();
+      ctx.restore();
+    }
+    function drawCenterLine() {
+      ctx.save();
+      ctx.setLineDash([20, 18]);
+      ctx.strokeStyle = '#0ff6';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(WIDTH/2, 0);
+      ctx.lineTo(WIDTH/2, HEIGHT);
+      ctx.stroke();
+      ctx.restore();
+    }
+    function drawWinner(text) {
+      ctx.save();
+      ctx.font = 'bold 60px Segoe UI, Arial';
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = '#0ff';
+      ctx.shadowBlur = 32;
+      ctx.textAlign = 'center';
+      ctx.fillText(text, WIDTH/2, HEIGHT/2 - 30);
+      ctx.restore();
+    }
+    // --- GAME LOGIC ---
+    function resetBall(dir = 1) {
+      ball.x = WIDTH/2;
+      ball.y = HEIGHT/2;
+      ball.vx = BALL_SPEED * dir * (Math.random() > 0.5 ? 1 : -1);
+      ball.vy = BALL_SPEED * (Math.random()*1.4 - 0.7);
+      ball.trail = [];
+    }
+    function resetGame() {
+      paddles[0].y = HEIGHT/2 - PADDLE_HEIGHT/2;
+      paddles[1].y = HEIGHT/2 - PADDLE_HEIGHT/2;
+      scores = [0,0];
+      running = true;
+      winner = null;
+      resetBall();
+      updateScoreboard();
+    }
+    function updateScoreboard() {
+      document.getElementById('scoreboard').textContent = `${scores[0]} : ${scores[1]}`;
+    }
+    function update() {
+      if (!running) return;
+      // Paddle movement
+      // Player 1: W/S
+      if (keys['w']) paddles[0].vy = -PADDLE_SPEED;
+      else if (keys['s']) paddles[0].vy = PADDLE_SPEED;
+      else paddles[0].vy = 0;
+      // Player 2: Up/Down
+      if (keys['ArrowUp']) paddles[1].vy = -PADDLE_SPEED;
+      else if (keys['ArrowDown']) paddles[1].vy = PADDLE_SPEED;
+      else paddles[1].vy = 0;
+      // Move paddles
+      for (let p of paddles) {
+        p.y += p.vy;
+        if (p.y < 0) p.y = 0;
+        if (p.y + PADDLE_HEIGHT > HEIGHT) p.y = HEIGHT - PADDLE_HEIGHT;
+      }
+      // Ball physics
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+      // Trail
+      ball.trail.push({x: ball.x, y: ball.y});
+      if (ball.trail.length > TRAIL_LENGTH) ball.trail.shift();
+      // Wall collision
+      if (ball.y - BALL_RADIUS < 0) {
+        ball.y = BALL_RADIUS;
+        ball.vy *= -1;
+        ball.color = '#0ff';
+      }
+      if (ball.y + BALL_RADIUS > HEIGHT) {
+        ball.y = HEIGHT - BALL_RADIUS;
+        ball.vy *= -1;
+        ball.color = '#f0f';
+      }
+      // Paddle collision
+      for (let i = 0; i < 2; i++) {
+        let p = paddles[i];
+        let hit = false;
+        if (ball.x - BALL_RADIUS < p.x + PADDLE_WIDTH &&
+            ball.x + BALL_RADIUS > p.x &&
+            ball.y + BALL_RADIUS > p.y &&
+            ball.y - BALL_RADIUS < p.y + PADDLE_HEIGHT) {
+          // Ball hits paddle
+          hit = true;
+          // Reflect X, add some Y based on where it hit
+          let rel = (ball.y - (p.y + PADDLE_HEIGHT/2)) / (PADDLE_HEIGHT/2);
+          ball.vx *= -1.12; // speed up a bit
+          ball.vy += rel * 4;
+          // Clamp max speed
+          let speed = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
+          if (speed > 17) {
+            ball.vx *= 17/speed;
+            ball.vy *= 17/speed;
+          }
+          // Move ball out of paddle
+          if (i === 0) ball.x = p.x + PADDLE_WIDTH + BALL_RADIUS;
+          else ball.x = p.x - BALL_RADIUS;
+          // Fancy color
+          ball.color = p.color;
+        }
+        if (hit) break;
+      }
+      // Score
+      if (ball.x < 0) {
+        scores[1]++;
+        updateScoreboard();
+        if (scores[1] >= MAX_SCORE) {
+          running = false;
+          winner = 'Player 2 Wins!';
+        }
+        resetBall(-1);
+      }
+      if (ball.x > WIDTH) {
+        scores[0]++;
+        updateScoreboard();
+        if (scores[0] >= MAX_SCORE) {
+          running = false;
+          winner = 'Player 1 Wins!';
+        }
+        resetBall(1);
+      }
+    }
+    function render() {
+      // Clear
+      ctx.clearRect(0,0,WIDTH,HEIGHT);
+      // Center line
+      drawCenterLine();
+      // Paddles
+      drawPaddle(paddles[0], '#0ff');
+      drawPaddle(paddles[1], '#f0f');
+      // Ball
+      drawBall(ball);
+      // Winner
+      if (winner) {
+        drawWinner(winner);
+      }
+    }
+    function gameLoop() {
+      update();
+      render();
+      requestAnimationFrame(gameLoop);
+    }
+    // --- EVENTS ---
+    document.addEventListener('keydown', e => {
+      keys[e.key] = true;
+    });
+    document.addEventListener('keyup', e => {
+      keys[e.key] = false;
+    });
+    document.getElementById('resetBtn').onclick = resetGame;
+    // --- INIT ---
+    updateScoreboard();
+    resetBall();
+    gameLoop();
+  </script>
+</body>
+</html>

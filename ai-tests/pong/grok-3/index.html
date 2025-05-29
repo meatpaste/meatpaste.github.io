@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2 Player Pong Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+        canvas {
+            border: 2px solid white;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+        #gameContainer {
+            position: relative;
+        }
+        #score {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            color: #fff;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+        }
+        #resetButton {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 16px;
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 107, 107, 0.6);
+            transition: transform 0.2s, background 0.3s;
+        }
+        #resetButton:hover {
+            transform: translateX(-50%) scale(1.05);
+            background: linear-gradient(45deg, #ff8e53, #ff6b6b);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="pongCanvas" width="800" height="400"></canvas>
+        <div id="score">0 - 0</div>
+        <button id="resetButton">Reset Game</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('pongCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const resetButton = document.getElementById('resetButton');
+
+        // Game objects
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 10,
+            speedX: 5,
+            speedY: 5,
+            color: '#fff',
+            particles: []
+        };
+
+        const paddle1 = {
+            x: 10,
+            y: canvas.height / 2 - 50,
+            width: 10,
+            height: 100,
+            color: '#ff6b6b',
+            speed: 8,
+            score: 0
+        };
+
+        const paddle2 = {
+            x: canvas.width - 20,
+            y: canvas.height / 2 - 50,
+            width: 10,
+            height: 100,
+            color: '#4facfe',
+            speed: 8,
+            score: 0
+        };
+
+        // Keyboard controls
+        const keys = {
+            w: false,
+            s: false,
+            ArrowUp: false,
+            ArrowDown: false
+        };
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key in keys) {
+                keys[e.key] = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key in keys) {
+                keys[e.key] = false;
+            }
+        });
+
+        // Reset button
+        resetButton.addEventListener('click', resetGame);
+
+        function resetGame() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.speedX = 5 * (Math.random() > 0.5 ? 1 : -1);
+            ball.speedY = 5;
+            paddle1.y = canvas.height / 2 - 50;
+            paddle2.y = canvas.height / 2 - 50;
+            ball.particles = [];
+        }
+
+        function createParticle(x, y, color) {
+            return {
+                x: x,
+                y: y,
+                alpha: 1,
+                size: Math.random() * 5 + 2,
+                speedX: (Math.random() - 0.5) * 3,
+                speedY: (Math.random() - 0.5) * 3,
+                color: color
+            };
+        }
+
+        function updateParticles(array) {
+            for (let i = array.length - 1; i >= 0; i--) {
+                let p = array[i];
+                p.x += p.speedX;
+                p.y += p.speedY;
+                p.alpha -= 0.02;
+                if (p.alpha <= 0) {
+                    array.splice(i, 1);
+                }
+            }
+        }
+
+        function drawParticles(array) {
+            for (let p of array) {
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function draw() {
+            // Clear canvas with a fading effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw center line
+            ctx.setLineDash([5, 15]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw paddles with glow effect
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = paddle1.color;
+            ctx.fillStyle = paddle1.color;
+            ctx.fillRect(paddle1.x, paddle1.y, paddle1.width, paddle1.height);
+            ctx.shadowColor = paddle2.color;
+            ctx.fillStyle = paddle2.color;
+            ctx.fillRect(paddle2.x, paddle2.y, paddle2.width, paddle2.height);
+            ctx.shadowBlur = 0;
+
+            // Draw ball with trail
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = ball.color;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = ball.color;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Draw particle effects
+            drawParticles(ball.particles);
+
+            // Move paddles
+            if (keys.w && paddle1.y > 0) {
+                paddle1.y -= paddle1.speed;
+            }
+            if (keys.s && paddle1.y < canvas.height - paddle1.height) {
+                paddle1.y += paddle1.speed;
+            }
+            if (keys.ArrowUp && paddle2.y > 0) {
+                paddle2.y -= paddle2.speed;
+            }
+            if (keys.ArrowDown && paddle2.y < canvas.height - paddle2.height) {
+                paddle2.y += paddle2.speed;
+            }
+
+            // Move ball
+            ball.x += ball.speedX;
+            ball.y += ball.speedY;
+
+            // Create trail particles for ball
+            if (Math.random() > 0.5) {
+                ball.particles.push(createParticle(ball.x, ball.y, ball.color));
+            }
+            updateParticles(ball.particles);
+
+            // Ball collision with top and bottom
+            if (ball.y + ball.radius > canvas.height || ball.y - ball.radius < 0) {
+                ball.speedY = -ball.speedY;
+                // Color flash effect on bounce
+                ball.color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                for (let i = 0; i < 5; i++) {
+                    ball.particles.push(createParticle(ball.x, ball.y, ball.color));
+                }
+            }
+
+            // Ball collision with paddles
+            if (
+                (ball.x - ball.radius < paddle1.x + paddle1.width &&
+                ball.y > paddle1.y &&
+                ball.y < paddle1.y + paddle1.height) ||
+                (ball.x + ball.radius > paddle2.x &&
+                ball.y > paddle2.y &&
+                ball.y < paddle2.y + paddle2.height)
+            ) {
+                ball.speedX = -ball.speedX;
+                // Impact effect - color change and particles
+                ball.color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                for (let i = 0; i < 10; i++) {
+                    ball.particles.push(createParticle(ball.x, ball.y, ball.color));
+                }
+                // Speed increase on hit
+                ball.speedX *= 1.05;
+            }
+
+            // Score points
+            if (ball.x < 0) {
+                paddle2.score++;
+                updateScore();
+                resetBall();
+            } else if (ball.x > canvas.width) {
+                paddle1.score++;
+                updateScore();
+                resetBall();
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.speedX = 5 * (Math.random() > 0.5 ? 1 : -1);
+            ball.speedY = 5 * (Math.random() - 0.5);
+            ball.color = '#fff';
+        }
+
+        function updateScore() {
+            scoreDisplay.textContent = `${paddle1.score} - ${paddle2.score}`;
+            // Flash score text
+            scoreDisplay.style.transform = 'translateX(-50%) scale(1.2)';
+            setTimeout(() => {
+                scoreDisplay.style.transform = 'translateX(-50%) scale(1)';
+            }, 200);
+        }
+
+        // Start the game
+        draw();
+    </script>
+</body>
+</html>

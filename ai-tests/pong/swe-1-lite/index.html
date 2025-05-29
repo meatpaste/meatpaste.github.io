@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Pong</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #0a0a1a;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 500px;
+            background: #0f0f2d;
+            border: 4px solid #3a3a8f;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(58, 58, 255, 0.3);
+            overflow: hidden;
+        }
+        
+        #game-canvas {
+            display: block;
+        }
+        
+        #score {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 40px;
+            box-sizing: border-box;
+            color: #fff;
+            font-size: 2em;
+            text-shadow: 0 0 10px #00f, 0 0 20px #00f;
+            pointer-events: none;
+        }
+        
+        #player1-score, #player2-score {
+            padding: 0 20px;
+        }
+        
+        #reset-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 25px;
+            background: #3a3a8f;
+            color: white;
+            border: 2px solid #5a5aff;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            outline: none;
+        }
+        
+        #reset-btn:hover {
+            background: #5a5aff;
+            box-shadow: 0 0 15px #5a5aff;
+            transform: translateX(-50%) scale(1.05);
+        }
+        
+        #winner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 3em;
+            text-align: center;
+            text-shadow: 0 0 10px #00f, 0 0 20px #00f;
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #5a5aff;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="800" height="500"></canvas>
+        <div id="score">
+            <div id="player1-score">0</div>
+            <div id="player2-score">0</div>
+        </div>
+        <div id="winner"></div>
+        <button id="reset-btn">Reset Game</button>
+    </div>
+
+    <script>
+        // Game constants
+        const PADDLE_WIDTH = 15;
+        const PADDLE_HEIGHT = 100;
+        const BALL_SIZE = 12;
+        const PADDLE_SPEED = 8;
+        const BALL_SPEED = 6;
+        const WINNING_SCORE = 5;
+        
+        // Game state
+        let canvas, ctx;
+        let player1Y = 200;
+        let player2Y = 200;
+        let ballX = 400;
+        let ballY = 250;
+        let ballSpeedX = BALL_SPEED;
+        let ballSpeedY = (Math.random() * 4) - 2;
+        let player1Score = 0;
+        let player2Score = 0;
+        let gameRunning = true;
+        let keys = {};
+        let particles = [];
+        let animationId;
+        
+        // Initialize game
+        function init() {
+            canvas = document.getElementById('game-canvas');
+            ctx = canvas.getContext('2d');
+            
+            // Event listeners
+            document.addEventListener('keydown', (e) => keys[e.key] = true);
+            document.addEventListener('keyup', (e) => keys[e.key] = false);
+            document.getElementById('reset-btn').addEventListener('click', resetGame);
+            
+            // Start game loop
+            gameLoop();
+        }
+        
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            update();
+            draw();
+            updateParticles();
+            
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        // Update game state
+        function update() {
+            // Player 1 controls (W/S)
+            if (keys['w'] && player1Y > 0) {
+                player1Y -= PADDLE_SPEED;
+            }
+            if (keys['s'] && player1Y < canvas.height - PADDLE_HEIGHT) {
+                player1Y += PADDLE_SPEED;
+            }
+            
+            // Player 2 controls (Up/Down arrows)
+            if (keys['ArrowUp'] && player2Y > 0) {
+                player2Y -= PADDLE_SPEED;
+            }
+            if (keys['ArrowDown'] && player2Y < canvas.height - PADDLE_HEIGHT) {
+                player2Y += PADDLE_SPEED;
+            }
+            
+            // Update ball position
+            ballX += ballSpeedX;
+            ballY += ballSpeedY;
+            
+            // Ball collision with top and bottom
+            if (ballY <= 0 || ballY >= canvas.height - BALL_SIZE) {
+                ballSpeedY = -ballSpeedY;
+                createParticles(ballX, ballY, 5);
+            }
+            
+            // Ball collision with paddles
+            // Left paddle
+            if (ballX <= PADDLE_WIDTH && ballY + BALL_SIZE > player1Y && ballY < player1Y + PADDLE_HEIGHT) {
+                const hitPosition = (ballY - (player1Y + PADDLE_HEIGHT/2)) / (PADDLE_HEIGHT/2);
+                const angle = hitPosition * Math.PI/4; // 45 degree max angle
+                ballSpeedX = Math.cos(angle) * BALL_SPEED * 1.2;
+                ballSpeedY = Math.sin(angle) * BALL_SPEED * 1.2;
+                createParticles(ballX, ballY, 8);
+            }
+            
+            // Right paddle
+            if (ballX >= canvas.width - PADDLE_WIDTH - BALL_SIZE && 
+                ballY + BALL_SIZE > player2Y && 
+                ballY < player2Y + PADDLE_HEIGHT) {
+                const hitPosition = (ballY - (player2Y + PADDLE_HEIGHT/2)) / (PADDLE_HEIGHT/2);
+                const angle = Math.PI - (hitPosition * Math.PI/4);
+                ballSpeedX = Math.cos(angle) * BALL_SPEED * 1.2 * -1;
+                ballSpeedY = Math.sin(angle) * BALL_SPEED * 1.2;
+                createParticles(ballX, ballY, 8);
+            }
+            
+            // Scoring
+            if (ballX < 0) {
+                player2Score++;
+                document.getElementById('player2-score').textContent = player2Score;
+                resetBall(1);
+                checkWin();
+            } else if (ballX > canvas.width) {
+                player1Score++;
+                document.getElementById('player1-score').textContent = player1Score;
+                resetBall(-1);
+                checkWin();
+            }
+        }
+        
+        // Draw game objects
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = 'rgba(15, 15, 45, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw center line
+            ctx.strokeStyle = 'rgba(90, 90, 255, 0.3)';
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width/2, 0);
+            ctx.lineTo(canvas.width/2, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw paddles with glow effect
+            // Player 1 (left)
+            const paddle1Gradient = ctx.createLinearGradient(0, player1Y, 0, player1Y + PADDLE_HEIGHT);
+            paddle1Gradient.addColorStop(0, '#5a5aff');
+            paddle1Gradient.addColorStop(1, '#3a3a8f');
+            
+            ctx.shadowColor = '#5a5aff';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = paddle1Gradient;
+            ctx.fillRect(0, player1Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+            
+            // Player 2 (right)
+            const paddle2Gradient = ctx.createLinearGradient(0, player2Y, 0, player2Y + PADDLE_HEIGHT);
+            paddle2Gradient.addColorStop(0, '#ff5a5a');
+            paddle2Gradient.addColorStop(1, '#8f3a3a');
+            
+            ctx.shadowColor = '#ff5a5a';
+            ctx.shadowBlur = 15;
+            ctx.fillStyle = paddle2Gradient;
+            ctx.fillRect(canvas.width - PADDLE_WIDTH, player2Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+            
+            // Draw ball with glow effect
+            const ballGradient = ctx.createRadialGradient(
+                ballX + BALL_SIZE/2, 
+                ballY + BALL_SIZE/2, 
+                0, 
+                ballX + BALL_SIZE/2, 
+                ballY + BALL_SIZE/2, 
+                BALL_SIZE/2
+            );
+            ballGradient.addColorStop(0, '#ffffff');
+            ballGradient.addColorStop(1, '#5a5aff');
+            
+            ctx.shadowColor = '#5a5aff';
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = ballGradient;
+            ctx.beginPath();
+            ctx.arc(ballX + BALL_SIZE/2, ballY + BALL_SIZE/2, BALL_SIZE/2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+            
+            // Draw particles
+            drawParticles();
+        }
+        
+        // Particle system for effects
+        function createParticles(x, y, count) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 1 + Math.random() * 3;
+                particles.push({
+                    x: x + BALL_SIZE/2,
+                    y: y + BALL_SIZE/2,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    alpha: 1,
+                    size: 2 + Math.random() * 3
+                });
+            }
+        }
+        
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.02;
+                
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+        
+        function drawParticles() {
+            for (const p of particles) {
+                ctx.fillStyle = `rgba(90, 90, 255, ${p.alpha})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        // Reset ball to center
+        function resetBall(direction) {
+            ballX = canvas.width / 2 - BALL_SIZE / 2;
+            ballY = canvas.height / 2 - BALL_SIZE / 2;
+            ballSpeedX = BALL_SPEED * direction;
+            ballSpeedY = (Math.random() * 4) - 2;
+            
+            // Create explosion effect
+            createParticles(ballX, ballY, 15);
+        }
+        
+        // Check for winner
+        function checkWin() {
+            if (player1Score >= WINNING_SCORE || player2Score >= WINNING_SCORE) {
+                gameRunning = false;
+                const winner = player1Score > player2Score ? 'Player 1' : 'Player 2';
+                document.getElementById('winner').textContent = `${winner} Wins!`;
+                document.getElementById('winner').style.opacity = '1';
+                cancelAnimationFrame(animationId);
+            }
+        }
+        
+        // Reset the game
+        function resetGame() {
+            // Reset scores
+            player1Score = 0;
+            player2Score = 0;
+            document.getElementById('player1-score').textContent = '0';
+            document.getElementById('player2-score').textContent = '0';
+            document.getElementById('winner').style.opacity = '0';
+            
+            // Reset positions
+            player1Y = (canvas.height - PADDLE_HEIGHT) / 2;
+            player2Y = (canvas.height - PADDLE_HEIGHT) / 2;
+            resetBall(Math.random() > 0.5 ? 1 : -1);
+            
+            // Start game if not running
+            if (!gameRunning) {
+                gameRunning = true;
+                gameLoop();
+            }
+        }
+        
+        // Start the game when the page loads
+        window.onload = init;
+    </script>
+</body>
+</html>

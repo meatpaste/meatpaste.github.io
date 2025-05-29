@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2-Player Pong Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #111;
+            font-family: 'Arial', sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 4px solid #333;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 150, 255, 0.5);
+            overflow: hidden;
+        }
+
+        #game-canvas {
+            background: #000;
+            position: absolute;
+        }
+
+        #center-line {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(-50%);
+            z-index: 1;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #score-container {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        #player1-score {
+            color: #ff4d4d;
+            margin-right: 40px;
+        }
+
+        #player2-score {
+            color: #4d4dff;
+            margin-left: 40px;
+        }
+
+        #reset-button {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            pointer-events: auto;
+        }
+
+        #reset-button:hover {
+            background: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            font-weight: bold;
+            text-align: center;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .controls-info {
+            position: absolute;
+            bottom: 60px;
+            width: 100%;
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        .particle {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="center-line"></div>
+        <div id="ui-container">
+            <div id="score-container">
+                <span id="player1-score">0</span>
+                <span id="player2-score">0</span>
+            </div>
+            <div id="game-over"></div>
+            <button id="reset-button">RESET</button>
+            <div class="controls-info">
+                Player 1: W/S | Player 2: ↑/↓
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game Constants and Variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+        const player1ScoreElement = document.getElementById('player1-score');
+        const player2ScoreElement = document.getElementById('player2-score');
+        const resetButton = document.getElementById('reset-button');
+        const gameOverElement = document.getElementById('game-over');
+        
+        // Set canvas size
+        canvas.width = gameContainer.clientWidth;
+        canvas.height = gameContainer.clientHeight;
+        
+        // Game settings
+        const paddleWidth = 15;
+        const paddleHeight = 100;
+        const paddleSpeed = 8;
+        const ballRadius = 10;
+        const maxScore = 7;
+        
+        // Game state
+        let gameRunning = true;
+        let player1Score = 0;
+        let player2Score = 0;
+        
+        // Paddles
+        const player1 = {
+            x: 30,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            color: '#ff4d4d',
+            velocity: 0,
+            moving: false,
+            trail: []
+        };
+        
+        const player2 = {
+            x: canvas.width - 30 - paddleWidth,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            color: '#4d4dff',
+            velocity: 0,
+            moving: false,
+            trail: []
+        };
+        
+        // Ball
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: ballRadius,
+            velocityX: 5,
+            velocityY: 1,
+            speed: 5,
+            color: '#ffffff',
+            trail: []
+        };
+        
+        // Particle effects
+        const particles = [];
+        const maxParticles = 100;
+        
+        // Controls
+        const keys = {
+            w: false,
+            s: false,
+            arrowUp: false,
+            arrowDown: false
+        };
+        
+        // Event Listeners
+        window.addEventListener('keydown', (e) => {
+            switch(e.key.toLowerCase()) {
+                case 'w':
+                    keys.w = true;
+                    break;
+                case 's':
+                    keys.s = true;
+                    break;
+                case 'arrowup':
+                    keys.arrowUp = true;
+                    break;
+                case 'arrowdown':
+                    keys.arrowDown = true;
+                    break;
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            switch(e.key.toLowerCase()) {
+                case 'w':
+                    keys.w = false;
+                    break;
+                case 's':
+                    keys.s = false;
+                    break;
+                case 'arrowup':
+                    keys.arrowUp = false;
+                    break;
+                case 'arrowdown':
+                    keys.arrowDown = false;
+                    break;
+            }
+        });
+        
+        // Reset Button
+        resetButton.addEventListener('click', resetGame);
+        
+        // Functions
+        function resetGame() {
+            player1Score = 0;
+            player2Score = 0;
+            updateScoreDisplay();
+            resetBall();
+            
+            player1.y = canvas.height / 2 - paddleHeight / 2;
+            player2.y = canvas.height / 2 - paddleHeight / 2;
+            
+            gameRunning = true;
+            gameOverElement.style.opacity = 0;
+            
+            // Clear all particles
+            particles.length = 0;
+        }
+        
+        function resetBall() {
+            // Random direction
+            const direction = Math.random() > 0.5 ? 1 : -1;
+            
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.velocityX = direction * 5;
+            ball.velocityY = (Math.random() * 2 - 1) * 3;
+            ball.speed = 5;
+            
+            // Clear trails
+            ball.trail = [];
+            player1.trail = [];
+            player2.trail = [];
+        }
+        
+        function updateScoreDisplay() {
+            player1ScoreElement.textContent = player1Score;
+            player2ScoreElement.textContent = player2Score;
+        }
+        
+        function createParticles(x, y, count, color, speed, size) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = Math.random() * speed;
+                
+                particles.push({
+                    x: x,
+                    y: y,
+                    size: Math.random() * size + 1,
+                    velocityX: Math.cos(angle) * velocity,
+                    velocityY: Math.sin(angle) * velocity,
+                    color: color,
+                    alpha: 1,
+                    life: Math.random() * 50 + 10
+                });
+                
+                // Limit particles
+                if (particles.length > maxParticles) {
+                    particles.shift();
+                }
+            }
+        }
+        
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                
+                p.x += p.velocityX;
+                p.y += p.velocityY;
+                p.life--;
+                p.alpha = p.life / 60;
+                
+                // Remove dead particles
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+        
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+        }
+        
+        function updateTrails() {
+            // Update ball trail
+            if (ball.trail.length > 10) ball.trail.shift();
+            ball.trail.push({x: ball.x, y: ball.y});
+            
+            // Update paddle trails if moving
+            if (player1.moving) {
+                if (player1.trail.length > 5) player1.trail.shift();
+                player1.trail.push({y: player1.y});
+            }
+            
+            if (player2.moving) {
+                if (player2.trail.length > 5) player2.trail.shift();
+                player2.trail.push({y: player2.y});
+            }
+        }
+        
+        function drawTrails() {
+            // Draw ball trail
+            for (let i = 0; i < ball.trail.length; i++) {
+                const alpha = i / ball.trail.length;
+                const size = ball.radius * alpha;
+                
+                ctx.globalAlpha = alpha * 0.5;
+                ctx.fillStyle = ball.color;
+                ctx.beginPath();
+                ctx.arc(ball.trail[i].x, ball.trail[i].y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Draw paddle trails
+            for (let i = 0; i < player1.trail.length; i++) {
+                const alpha = i / player1.trail.length;
+                
+                ctx.globalAlpha = alpha * 0.3;
+                ctx.fillStyle = player1.color;
+                ctx.fillRect(
+                    player1.x,
+                    player1.trail[i].y,
+                    player1.width,
+                    player1.height
+                );
+            }
+            
+            for (let i = 0; i < player2.trail.length; i++) {
+                const alpha = i / player2.trail.length;
+                
+                ctx.globalAlpha = alpha * 0.3;
+                ctx.fillStyle = player2.color;
+                ctx.fillRect(
+                    player2.x,
+                    player2.trail[i].y,
+                    player2.width,
+                    player2.height
+                );
+            }
+            
+            ctx.globalAlpha = 1;
+        }
+        
+        function drawPaddle(paddle) {
+            // Add glow effect
+            ctx.shadowColor = paddle.color;
+            ctx.shadowBlur = 15;
+            
+            ctx.fillStyle = paddle.color;
+            ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+        }
+        
+        function drawBall() {
+            // Add glow effect
+            ctx.shadowColor = ball.color;
+            ctx.shadowBlur = 15;
+            
+            ctx.fillStyle = ball.color;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+        }
+        
+        function update() {
+            if (!gameRunning) return;
+            
+            // Move paddles based on key presses
+            player1.moving = false;
+            if (keys.w) {
+                player1.y -= paddleSpeed;
+                player1.moving = true;
+                player1.velocity = -paddleSpeed;
+            } else if (keys.s) {
+                player1.y += paddleSpeed;
+                player1.moving = true;
+                player1.velocity = paddleSpeed;
+            } else {
+                player1.velocity = 0;
+            }
+            
+            player2.moving = false;
+            if (keys.arrowUp) {
+                player2.y -= paddleSpeed;
+                player2.moving = true;
+                player2.velocity = -paddleSpeed;
+            } else if (keys.arrowDown) {
+                player2.y += paddleSpeed;
+                player2.moving = true;
+                player2.velocity = paddleSpeed;
+            } else {
+                player2.velocity = 0;
+            }
+            
+            // Keep paddles within the canvas
+            if (player1.y < 0) player1.y = 0;
+            if (player1.y + player1.height > canvas.height) player1.y = canvas.height - player1.height;
+            
+            if (player2.y < 0) player2.y = 0;
+            if (player2.y + player2.height > canvas.height) player2.y = canvas.height - player2.height;
+            
+            // Move the ball
+            ball.x += ball.velocityX;
+            ball.y += ball.velocityY;
+            
+            // Ball collision with top and bottom walls
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+                ball.velocityY = -ball.velocityY;
+                
+                // Wall hit particles
+                const wallColor = ball.y < canvas.height / 2 ? '#ffffff' : '#ffffff';
+                createParticles(ball.x, ball.y < ball.radius ? ball.radius : canvas.height - ball.radius, 
+                               10, wallColor, 3, 3);
+                
+                // Add some randomness after wall bounce
+                ball.velocityY += (Math.random() * 2 - 1) * 0.5;
+            }
+            
+            // Ball collision with paddles
+            // Player 1 paddle
+            if (ball.x - ball.radius < player1.x + player1.width && 
+                ball.y > player1.y && 
+                ball.y < player1.y + player1.height && 
+                ball.velocityX < 0) {
+                
+                // Calculate bounce angle based on where the ball hits the paddle
+                const hitPos = (ball.y - (player1.y + player1.height / 2)) / (player1.height / 2);
+                const bounceAngle = hitPos * (Math.PI / 4); // Max 45 degree angle
+                
+                ball.velocityX = -ball.velocityX;
+                ball.velocityY = ball.speed * Math.sin(bounceAngle);
+                
+                // Add effect of paddle movement to the ball
+                ball.velocityY += player1.velocity * 0.2;
+                
+                // Increase speed slightly with each hit
+                ball.speed += 0.3;
+                
+                // Create particles on paddle hit
+                createParticles(ball.x - ball.radius, ball.y, 15, player1.color, 4, 4);
+            }
+            
+            // Player 2 paddle
+            if (ball.x + ball.radius > player2.x && 
+                ball.y > player2.y && 
+                ball.y < player2.y + player2.height && 
+                ball.velocityX > 0) {
+                
+                // Calculate bounce angle based on where the ball hits the paddle
+                const hitPos = (ball.y - (player2.y + player2.height / 2)) / (player2.height / 2);
+                const bounceAngle = hitPos * (Math.PI / 4); // Max 45 degree angle
+                
+                ball.velocityX = -ball.velocityX;
+                ball.velocityY = ball.speed * Math.sin(bounceAngle);
+                
+                // Add effect of paddle movement to the ball
+                ball.velocityY += player2.velocity * 0.2;
+                
+                // Increase speed slightly with each hit
+                ball.speed += 0.3;
+                
+                // Create particles on paddle hit
+                createParticles(ball.x + ball.radius, ball.y, 15, player2.color, 4, 4);
+            }
+            
+            // Ball out of bounds - scoring
+            if (ball.x < 0) {
+                player2Score++;
+                updateScoreDisplay();
+                createParticles(0, ball.y, 30, '#ffffff', 5, 5);
+                checkWinner();
+                resetBall();
+            } else if (ball.x > canvas.width) {
+                player1Score++;
+                updateScoreDisplay();
+                createParticles(canvas.width, ball.y, 30, '#ffffff', 5, 5);
+                checkWinner();
+                resetBall();
+            }
+            
+            // Update visual effects
+            updateTrails();
+            updateParticles();
+        }
+        
+        function checkWinner() {
+            if (player1Score >= maxScore) {
+                gameOver('PLAYER 1 WINS!');
+            } else if (player2Score >= maxScore) {
+                gameOver('PLAYER 2 WINS!');
+            }
+        }
+        
+        function gameOver(message) {
+            gameRunning = false;
+            gameOverElement.textContent = message;
+            gameOverElement.style.opacity = 1;
+            
+            // Celebration particles!
+            const colors = ['#ff4d4d', '#4d4dff', '#ffffff', '#ffcc00', '#00ffcc'];
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    createParticles(
+                        canvas.width / 2, 
+                        canvas.height / 2, 
+                        30, 
+                        colors[Math.floor(Math.random() * colors.length)],
+                        10,
+                        8
+                    );
+                }, i * 200);
+            }
+        }
+        
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw trails
+            drawTrails();
+            
+            // Draw particles
+            drawParticles();
+            
+            // Draw paddles and ball
+            drawPaddle(player1);
+            drawPaddle(player2);
+            drawBall();
+        }
+        
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start the game
+        resetGame();
+        gameLoop();
+    </script>
+</body>
+</html>
