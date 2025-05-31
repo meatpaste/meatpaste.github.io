@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Pong AI Tests - @meatpaste</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400&family=Noto+Sans+Mono:wght@400&display=swap" rel="stylesheet">
+</head>
+<body class="m-0 p-0 bg-black text-white min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <header class="mb-8">
+      <h1 class="text-3xl font-bold mb-2">Pong AI Tests</h1>
+      <div class="flex items-center space-x-4">
+        <a href="/ai-tests" class="text-blue-400 hover:underline">← Back to AI Tests</a>
+        <span class="text-gray-400">/</span>
+        <span>Shooter</span>
+      </div>
+    </header>
+    
+    <div class="flex flex-col md:flex-row gap-8">
+      <!-- Left column for content -->
+      <div class="flex-1">
+        <div class="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+          <h2 class="text-2xl font-semibold mb-4">Pong AI Tests</h2>
+          <p class="mb-4 font-mono">
+            ## Shooter<br />
+            At [pathToFile] create a 'dual stick' shooter game in a single html file. 
+            - Fills mobile screen in landscape<br />
+            - Uses WASD to move, arrows to shoot on desktop<br />
+            - Left thumb moves, right thumb fires on mobile<br />
+            - Instructions at beggining<br />
+            - Procedural level generation<br />
+            - Increasing difficulty<br />
+            - Powerups<br />
+            - High score<br />
+            - 3D/parallax background<br />
+            - Fancy effects (be creative!)<br />
+          </p>
+        </div>
+      </div>
+      
+      <!-- Right column for model list -->
+      <div class="w-full md:w-80 flex-shrink-0">
+        <div class="bg-gray-900/50 p-6 rounded-lg border border-gray-700">
+          <h3 class="text-xl font-semibold mb-4 pb-2 border-b border-gray-700">Model Tests</h3>
+          <div class="space-y-2">
+            <a href="/ai-tests/shooter/claude-3.7-sonnet" target="_blank" class="block px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors duration-200">
+              <div class="font-medium">Claude 3.7 Sonnet</div>
+            </a>
+            <a href="/ai-tests/shooter/deepseek-r1-0528" target="_blank" class="block px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors duration-200">
+              <div class="font-medium">DeepSeek R1 0528</div>
+            </a>
+            <a href="/ai-tests/shooter/gpt-4.1" target="_blank" class="block px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors duration-200">
+              <div class="font-medium">GPT-4.1</div>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

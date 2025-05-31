@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dual Stick Shooter</title>
+    <style>
+        /* Add some basic styling to our game */
+        body {
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        
+        /* Style our game container */
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #000;
+        }
+        
+        /* Style our player */
+        #player {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: #fff;
+            border-radius: 50%;
+        }
+        
+        /* Style our enemies */
+        .enemy {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: #f00;
+            border-radius: 50%;
+        }
+        
+        /* Style our bullets */
+        .bullet {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #0f0;
+            border-radius: 50%;
+        }
+        
+        /* Style our joysticks */
+        #joystick-left, #joystick-right {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            background-color: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* Style our joystick handles */
+        #joystick-left-handle, #joystick-right-handle {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* Style our score */
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: #fff;
+        }
+        
+        /* Style our parallax background */
+        #parallax-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://picsum.photos/2000/1000');
+            background-size: cover;
+            background-position: center;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body>
+    <!-- Create our game container -->
+    <div id="game-container">
+        <!-- Create our parallax background -->
+        <div id="parallax-background"></div>
+        
+        <!-- Create our player -->
+        <div id="player"></div>
+        
+        <!-- Create our enemies -->
+        <div class="enemy" id="enemy-1"></div>
+        <div class="enemy" id="enemy-2"></div>
+        <div class="enemy" id="enemy-3"></div>
+        
+        <!-- Create our bullets -->
+        <div class="bullet" id="bullet-1"></div>
+        <div class="bullet" id="bullet-2"></div>
+        <div class="bullet" id="bullet-3"></div>
+        
+        <!-- Create our joysticks -->
+        <div id="joystick-left">
+            <div id="joystick-left-handle"></div>
+        </div>
+        <div id="joystick-right">
+            <div id="joystick-right-handle"></div>
+        </div>
+        
+        <!-- Create our score -->
+        <div id="score">Score: 0</div>
+    </div>
+    
+    <script>
+        // Get our game container
+        const gameContainer = document.getElementById('game-container');
+        
+        // Get our parallax background
+        const parallaxBackground = document.getElementById('parallax-background');
+        
+        // Get our player
+        const player = document.getElementById('player');
+        
+        // Get our enemies
+        const enemies = document.querySelectorAll('.enemy');
+        
+        // Get our bullets
+        const bullets = document.querySelectorAll('.bullet');
+        
+        // Get our joysticks
+        const joystickLeft = document.getElementById('joystick-left');
+        const joystickRight = document.getElementById('joystick-right');
+        
+        // Get our joystick handles
+        const joystickLeftHandle = document.getElementById('joystick-left-handle');
+        const joystickRightHandle = document.getElementById('joystick-right-handle');
+        
+        // Get our score
+        const scoreElement = document.getElementById('score');
+        
+        // Set our game variables
+        let playerSpeed = 5;
+        let enemySpeed = 2;
+        let bulletSpeed = 10;
+        let joystickLeftX = 0;
+        let joystickLeftY = 0;
+        let joystickRightX = 0;
+        let joystickRightY = 0;
+        let score = 0;
+        let wave = 1;
+        
+        // Add event listeners to our joysticks
+        joystickLeft.addEventListener('touchstart', (e) => {
+            joystickLeftX = e.touches[0].clientX - joystickLeft.offsetLeft;
+            joystickLeftY = e.touches[0].clientY - joystickLeft.offsetTop;
+        });
+        
+        joystickLeft.addEventListener('touchmove', (e) => {
+            joystickLeftX = e.touches[0].clientX - joystickLeft.offsetLeft;
+            joystickLeftY = e.touches[0].clientY - joystickLeft.offsetTop;
+        });
+        
+        joystickRight.addEventListener('touchstart', (e) => {
+            joystickRightX = e.touches[0].clientX - joystickRight.offsetLeft;
+            joystickRightY = e.touches[0].clientY - joystickRight.offsetTop;
+        });
+        
+        joystickRight.addEventListener('touchmove', (e) => {
+            joystickRightX = e.touches[0].clientX - joystickRight.offsetLeft;
+            joystickRightY = e.touches[0].clientY - joystickRight.offsetTop;
+        });
+        
+        // Add event listeners for desktop controls
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'w') {
+                joystickLeftY -= 10;
+            } else if (e.key === 's') {
+                joystickLeftY += 10;
+            } else if (e.key === 'a') {
+                joystickLeftX -= 10;
+            } else if (e.key === 'd') {
+                joystickLeftX += 10;
+            } else if (e.key === 'ArrowUp') {
+                joystickRightY -= 10;
+            } else if (e.key === 'ArrowDown') {
+                joystickRightY += 10;
+            } else if (e.key === 'ArrowLeft') {
+                joystickRightX -= 10;
+            } else if (e.key === 'ArrowRight') {
+                joystickRightX += 10;
+            } else if (e.key === ' ') {
+                // Shoot bullet
+                const bullet = document.createElement('div');
+                bullet.className = 'bullet';
+                bullet.style.left = `${joystickRightX}px`;
+                bullet.style.top = `${joystickRightY}px`;
+                gameContainer.appendChild(bullet);
+                bullets.push(bullet);
+            }
+        });
+        
+        // Update our game state
+        function update() {
+            // Move our player
+            player.style.left = `${joystickLeftX}px`;
+            player.style.top = `${joystickLeftY}px`;
+            
+            // Move our enemies
+            enemies.forEach((enemy) => {
+                enemy.style.left = `${Math.random() * gameContainer.offsetWidth}px`;
+                enemy.style.top = `${Math.random() * gameContainer.offsetHeight}px`;
+            });
+            
+            // Move our bullets
+            bullets.forEach((bullet) => {
+                bullet.style.left = `${joystickRightX}px`;
+                bullet.style.top = `${joystickRightY}px`;
+            });
+            
+            // Update our score
+            scoreElement.textContent = `Score: ${score}`;
+            
+            // Update our wave
+            if (score >= wave * 10) {
+                wave++;
+                enemySpeed += 0.5;
+            }
+        }
+        
+        // Draw our game state
+        function draw() {
+            // Clear our game container
+            gameContainer.innerHTML = '';
+            
+            // Draw our parallax background
+            gameContainer.appendChild(parallaxBackground);
+            
+            // Draw our player
+            gameContainer.appendChild(player);
+            
+            // Draw our enemies
+            enemies.forEach((enemy) => {
+                gameContainer.appendChild(enemy);
+            });
+            
+            // Draw our bullets
+            bullets.forEach((bullet) => {
+                gameContainer.appendChild(bullet);
+            });
+            
+            // Draw our joysticks
+            gameContainer.appendChild(joystickLeft);
+            gameContainer.appendChild(joystickRight);
+            
+            // Draw our score
+            gameContainer.appendChild(scoreElement);
+        }
+        
+        // Main game loop
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+        
+        // Start our game loop
+        loop();
+    </script>
+</body>
+</html>

@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
+  <title>Dual Stick Shooter 3D</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #101018;
+      width: 100vw;
+      height: 100vh;
+      touch-action: none;
+    }
+    body {
+      width: 100vw;
+      height: 100vh;
+      overscroll-behavior: none;
+    }
+    canvas {
+      display: block;
+      position: fixed;
+      left: 0; top: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #101018;
+      z-index: 1;
+    }
+    #instructions {
+      position: fixed;
+      left: 0; top: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(10,10,24,0.97);
+      color: #fff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 2.5vw;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 10;
+      text-align: center;
+      transition: opacity 0.5s;
+    }
+    #instructions button {
+      margin-top: 2vw;
+      padding: 1vw 4vw;
+      font-size: 2vw;
+      border: none;
+      border-radius: 1vw;
+      background: #3af;
+      color: #fff;
+      box-shadow: 0 0 1vw #3af8;
+      cursor: pointer;
+    }
+    #scoreboard {
+      position: fixed;
+      left: 2vw; top: 2vw;
+      color: #fff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 2vw;
+      z-index: 5;
+      text-shadow: 0 0 0.5vw #000b;
+      pointer-events: none;
+    }
+    @media (max-width: 900px) {
+      #instructions, #scoreboard {
+        font-size: 4vw;
+      }
+      #instructions button {
+        font-size: 4vw;
+        padding: 2vw 8vw;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="instructions">
+    <h1>Dual Stick Shooter 3D</h1>
+    <div style="max-width:90vw;">
+      <b>Desktop:</b><br>
+      Move: <span style="color:#3af">WASD</span><br>
+      Shoot: <span style="color:#3af">Arrow Keys</span><br><br>
+      <b>Mobile:</b><br>
+      Left thumb: Move<br>
+      Right thumb: Shoot<br><br>
+      Survive as long as you can!<br>
+      Collect powerups, dodge enemies, and rack up your high score.<br><br>
+      <span style="font-size:1.2em; color:#ff0;">Tap, click or press any key to start!</span>
+    </div>
+    <button id="startBtn">Start Game</button>
+  </div>
+  <div id="scoreboard"></div>
+  <script>
+// --- Utility Functions ---
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
+function rand(a, b) { return a + Math.random() * (b - a); }
+function randInt(a, b) { return Math.floor(rand(a, b+1)); }
+function angleTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
+function randChoice(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
+
+// --- Game Constants ---
+const GAME_W = 1920, GAME_H = 1080;
+const PLAYER_SIZE = 38, PLAYER_SPEED = 6, PLAYER_COLOR = '#3af';
+const BULLET_SPEED = 16, BULLET_SIZE = 12, BULLET_COLOR = '#fff';
+const ENEMY_BASE_SPEED = 2.2, ENEMY_SIZE = 44;
+const POWERUP_SIZE = 36;
+const LEVEL_TIME = 30; // seconds per level
+const PARALLAX_LAYERS = 5;
+const PARALLAX_DEPTH = [0.08, 0.15, 0.25, 0.4, 0.7];
+const PARALLAX_COLORS = ['#223','rgba(40,40,90,0.7)','rgba(80,80,200,0.5)','rgba(120,180,255,0.25)','rgba(255,255,255,0.12)'];
+
+// --- Canvas Setup ---
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let dpr = window.devicePixelRatio || 1;
+let width = window.innerWidth, height = window.innerHeight;
+let landscape = width > height;
+function resize() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  landscape = width > height;
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Input Handling ---
+let keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// --- Virtual Joysticks for Mobile ---
+let isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
+let leftStick = {active:false, x:0, y:0, dx:0, dy:0};
+let rightStick = {active:false, x:0, y:0, dx:0, dy:0};
+canvas.addEventListener('touchstart', handleTouch, {passive:false});
+canvas.addEventListener('touchmove', handleTouch, {passive:false});
+canvas.addEventListener('touchend', handleTouch, {passive:false});
+function handleTouch(e) {
+  e.preventDefault();
+  leftStick.active = rightStick.active = false;
+  leftStick.dx = leftStick.dy = rightStick.dx = rightStick.dy = 0;
+  for (let t of e.touches) {
+    let tx = t.clientX, ty = t.clientY;
+    if (tx < width/2) {
+      leftStick.active = true;
+      leftStick.x = tx; leftStick.y = ty;
+      leftStick.dx = (tx - width*0.22) / (width*0.22);
+      leftStick.dy = (ty - height*0.7) / (height*0.22);
+    } else {
+      rightStick.active = true;
+      rightStick.x = tx; rightStick.y = ty;
+      rightStick.dx = (tx - width*0.78) / (width*0.22);
+      rightStick.dy = (ty - height*0.7) / (height*0.22);
+    }
+  }
+}
+
+// --- Game State ---
+let state = 'instructions'; // 'playing', 'gameover'
+let score = 0, highScore = 0, level = 1, timeLeft = LEVEL_TIME;
+let player, bullets, enemies, powerups, particles, bgStars;
+let shootCooldown = 0, powerupActive = null, powerupTimer = 0;
+let shake = 0;
+
+// --- Load High Score ---
+if (localStorage['dualstick3d_highscore']) {
+  highScore = +localStorage['dualstick3d_highscore'];
+}
+
+// --- Instructions Overlay ---
+const instructions = document.getElementById('instructions');
+const startBtn = document.getElementById('startBtn');
+function hideInstructions() {
+  instructions.style.opacity = 0;
+  setTimeout(()=>instructions.style.display='none', 500);
+  startGame();
+}
+startBtn.onclick = hideInstructions;
+window.addEventListener('keydown', e => { if(state==='instructions') hideInstructions(); });
+canvas.addEventListener('pointerdown', e => { if(state==='instructions') hideInstructions(); });
+
+// --- Scoreboard ---
+const scoreboard = document.getElementById('scoreboard');
+function updateScoreboard() {
+  scoreboard.innerHTML = `Score: <b>${score}</b><br>Level: ${level}<br>High: ${highScore}`;
+}
+
+// --- Game Init ---
+function startGame() {
+  state = 'playing';
+  score = 0; level = 1; timeLeft = LEVEL_TIME;
+  player = {x:GAME_W/2, y:GAME_H/2, vx:0, vy:0, size:PLAYER_SIZE, color:PLAYER_COLOR, hp:3, invuln:0, fireRate:1, multi:1};
+  bullets = [];
+  enemies = [];
+  powerups = [];
+  particles = [];
+  bgStars = [];
+  for (let l=0; l<PARALLAX_LAYERS; ++l) {
+    let layer = [];
+    let n = 32 + l*24;
+    for (let i=0; i<n; ++i) {
+      layer.push({x:rand(0,GAME_W), y:rand(0,GAME_H), r:rand(0.6,2.5)*(1+l*0.3)});
+    }
+    bgStars.push(layer);
+  }
+  shootCooldown = 0;
+  powerupActive = null; powerupTimer = 0;
+  shake = 0;
+  spawnEnemies();
+  updateScoreboard();
+}
+
+// --- Procedural Level/Enemy Generation ---
+function spawnEnemies() {
+  let count = 6 + level*2;
+  for (let i=0; i<count; ++i) {
+    let angle = rand(0,Math.PI*2);
+    let distFromPlayer = rand(GAME_W*0.32, GAME_W*0.44);
+    let ex = player.x + Math.cos(angle)*distFromPlayer;
+    let ey = player.y + Math.sin(angle)*distFromPlayer;
+    ex = clamp(ex, ENEMY_SIZE, GAME_W-ENEMY_SIZE);
+    ey = clamp(ey, ENEMY_SIZE, GAME_H-ENEMY_SIZE);
+    let type = rand() < 0.7 ? 'chaser' : randChoice(['shooter','splitter']);
+    let speed = ENEMY_BASE_SPEED + level*0.2 + rand(-0.5,0.5);
+    enemies.push({x:ex, y:ey, vx:0, vy:0, size:ENEMY_SIZE, color:'#f33', type, hp:type==='splitter'?2:1, speed, cd:0});
+  }
+}
+
+function spawnPowerup() {
+  let types = ['rapid','shield','multi','heal','score'];
+  let type = randChoice(types);
+  let x = rand(POWERUP_SIZE, GAME_W-POWERUP_SIZE);
+  let y = rand(POWERUP_SIZE, GAME_H-POWERUP_SIZE);
+  powerups.push({x, y, size:POWERUP_SIZE, type, color:powerupColor(type), timer:0});
+}
+function powerupColor(type) {
+  return {
+    rapid:'#3af', shield:'#ff0', multi:'#f0f', heal:'#0f6', score:'#fa0'
+  }[type]||'#fff';
+}
+
+// --- Main Game Loop ---
+let lastTime = 0;
+function gameLoop(ts) {
+  let dt = Math.min((ts-lastTime)/16.67, 2.5); // ~60fps
+  lastTime = ts;
+  if (state==='playing') updateGame(dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+
+// --- Update Logic ---
+function updateGame(dt) {
+  // Difficulty scaling
+  timeLeft -= dt/60;
+  if (timeLeft <= 0) {
+    ++level;
+    timeLeft = LEVEL_TIME;
+    spawnEnemies();
+    if (rand()<0.7) spawnPowerup();
+  }
+  // Player Movement
+  let mx=0, my=0;
+  if (isMobile && leftStick.active) {
+    mx = clamp(leftStick.dx, -1, 1);
+    my = clamp(leftStick.dy, -1, 1);
+  } else {
+    if (keys['KeyW']) my -= 1;
+    if (keys['KeyS']) my += 1;
+    if (keys['KeyA']) mx -= 1;
+    if (keys['KeyD']) mx += 1;
+  }
+  let mag = Math.hypot(mx, my);
+  if (mag > 1) { mx/=mag; my/=mag; }
+  player.vx = lerp(player.vx, mx*PLAYER_SPEED, 0.35);
+  player.vy = lerp(player.vy, my*PLAYER_SPEED, 0.35);
+  player.x = clamp(player.x + player.vx, player.size, GAME_W-player.size);
+  player.y = clamp(player.y + player.vy, player.size, GAME_H-player.size);
+  if (player.invuln>0) player.invuln -= dt;
+
+  // Shooting
+  let sx=0, sy=0, shooting=false;
+  if (isMobile && rightStick.active) {
+    sx = clamp(rightStick.dx, -1, 1);
+    sy = clamp(rightStick.dy, -1, 1);
+    shooting = Math.abs(sx)+Math.abs(sy) > 0.2;
+  } else {
+    if (keys['ArrowUp']) sy -= 1;
+    if (keys['ArrowDown']) sy += 1;
+    if (keys['ArrowLeft']) sx -= 1;
+    if (keys['ArrowRight']) sx += 1;
+    shooting = sx!==0 || sy!==0;
+  }
+  shootCooldown -= dt/player.fireRate;
+  if (shooting && shootCooldown<=0) {
+    let ang = Math.atan2(sy, sx);
+    for (let m=0; m<player.multi; ++m) {
+      let spread = (player.multi>1) ? (m-(player.multi-1)/2)*0.18 : 0;
+      bullets.push({x:player.x, y:player.y, vx:Math.cos(ang+spread)*BULLET_SPEED, vy:Math.sin(ang+spread)*BULLET_SPEED, size:BULLET_SIZE, color:BULLET_COLOR, life:44});
+    }
+    shootCooldown = 8;
+    // Muzzle flash
+    particles.push({x:player.x+Math.cos(ang)*player.size, y:player.y+Math.sin(ang)*player.size, vx:0, vy:0, r:rand(18,32), color:'#fff', life:10, type:'flash'});
+  }
+
+  // Bullets
+  for (let i=bullets.length-1; i>=0; --i) {
+    let b = bullets[i];
+    b.x += b.vx*dt; b.y += b.vy*dt;
+    b.life -= dt;
+    if (b.x<-60 || b.x>GAME_W+60 || b.y<-60 || b.y>GAME_H+60 || b.life<=0) bullets.splice(i,1);
+  }
+
+  // Enemies
+  for (let i=enemies.length-1; i>=0; --i) {
+    let e = enemies[i];
+    if (e.type==='chaser') {
+      let ang = angleTo(e.x,e.y,player.x,player.y);
+      e.vx = Math.cos(ang)*e.speed;
+      e.vy = Math.sin(ang)*e.speed;
+    } else if (e.type==='shooter') {
+      let distToPlayer = dist(e.x,e.y,player.x,player.y);
+      if (distToPlayer>320) {
+        let ang = angleTo(e.x,e.y,player.x,player.y);
+        e.vx = Math.cos(ang)*e.speed*0.6;
+        e.vy = Math.sin(ang)*e.speed*0.6;
+      } else {
+        e.vx = lerp(e.vx,0,0.6);
+        e.vy = lerp(e.vy,0,0.6);
+        e.cd -= dt;
+        if (e.cd<=0) {
+          let ang = angleTo(e.x,e.y,player.x,player.y);
+          bullets.push({x:e.x, y:e.y, vx:Math.cos(ang)*BULLET_SPEED*0.7, vy:Math.sin(ang)*BULLET_SPEED*0.7, size:BULLET_SIZE, color:'#f33', life:34});
+          e.cd = rand(24,44)-level*0.5;
+        }
+      }
+    } else if (e.type==='splitter') {
+      let ang = angleTo(e.x,e.y,player.x,player.y);
+      e.vx = Math.cos(ang)*e.speed*0.75;
+      e.vy = Math.sin(ang)*e.speed*0.75;
+    }
+    e.x = clamp(e.x + e.vx*dt, e.size, GAME_W-e.size);
+    e.y = clamp(e.y + e.vy*dt, e.size, GAME_H-e.size);
+  }
+
+  // Collisions: Bullets/Enemies
+  for (let i=enemies.length-1; i>=0; --i) {
+    let e = enemies[i];
+    for (let j=bullets.length-1; j>=0; --j) {
+      let b = bullets[j];
+      if (b.color!==BULLET_COLOR) continue;
+      if (dist(e.x,e.y,b.x,b.y) < e.size+b.size-12) {
+        e.hp -= 1;
+        bullets.splice(j,1);
+        particles.push({x:e.x, y:e.y, vx:rand(-2,2), vy:rand(-2,2), r:rand(10,20), color:'#f33', life:20, type:'hit'});
+        if (e.hp<=0) {
+          score += 10*level;
+          shake = 12;
+          for (let k=0;k<10;++k) particles.push({x:e.x, y:e.y, vx:rand(-4,4), vy:rand(-4,4), r:rand(8,18), color:'#f33', life:rand(16,32), type:'death'});
+          if (e.type==='splitter') {
+            for (let s=0; s<2; ++s) {
+              enemies.push({x:e.x+rand(-40,40), y:e.y+rand(-40,40), vx:0, vy:0, size:ENEMY_SIZE*0.7, color:'#f99', type:'chaser', hp:1, speed:e.speed+0.7, cd:0});
+            }
+          }
+          enemies.splice(i,1);
+        }
+        break;
+      }
+    }
+  }
+
+  // Collisions: Enemy/Player
+  for (let i=enemies.length-1; i>=0; --i) {
+    let e = enemies[i];
+    if (dist(e.x,e.y,player.x,player.y) < e.size+player.size-14) {
+      if (player.invuln<=0) {
+        player.hp -= 1;
+        player.invuln = 60;
+        shake = 18;
+        particles.push({x:player.x, y:player.y, vx:rand(-4,4), vy:rand(-4,4), r:rand(18,32), color:'#ff0', life:32, type:'hit'});
+        if (player.hp<=0) {
+          gameOver();
+          return;
+        }
+      }
+    }
+  }
+
+  // Powerups
+  for (let i=powerups.length-1; i>=0; --i) {
+    let p = powerups[i];
+    p.timer += dt;
+    if (dist(p.x,p.y,player.x,player.y) < p.size+player.size-10) {
+      applyPowerup(p.type);
+      powerups.splice(i,1);
+      for (let k=0;k<8;++k) particles.push({x:p.x, y:p.y, vx:rand(-3,3), vy:rand(-3,3), r:rand(10,18), color:powerupColor(p.type), life:rand(14,24), type:'pup'});
+    } else if (p.timer>600) {
+      powerups.splice(i,1);
+    }
+  }
+
+  // Powerup effects
+  if (powerupActive) {
+    powerupTimer -= dt;
+    if (powerupTimer<=0) {
+      removePowerup();
+    }
+  }
+
+  // Particles
+  for (let i=particles.length-1; i>=0; --i) {
+    let p = particles[i];
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.r *= 0.96;
+    p.life -= dt;
+    if (p.life<=0) particles.splice(i,1);
+  }
+
+  // Random powerup spawn
+  if (rand()<0.008*dt && powerups.length<2) spawnPowerup();
+  updateScoreboard();
+}
+
+function applyPowerup(type) {
+  if (type==='rapid') { player.fireRate = 2.5; powerupActive = 'rapid'; powerupTimer = 420; }
+  if (type==='multi') { player.multi = 3; powerupActive = 'multi'; powerupTimer = 420; }
+  if (type==='shield') { player.invuln = 320; powerupActive = 'shield'; powerupTimer = 320; }
+  if (type==='heal') { player.hp = Math.min(player.hp+1, 3); }
+  if (type==='score') { score += 400; }
+}
+function removePowerup() {
+  if (powerupActive==='rapid') player.fireRate = 1;
+  if (powerupActive==='multi') player.multi = 1;
+  powerupActive = null;
+  powerupTimer = 0;
+}
+
+function gameOver() {
+  state = 'gameover';
+  if (score > highScore) {
+    highScore = score;
+    localStorage['dualstick3d_highscore'] = highScore;
+  }
+  setTimeout(()=>{
+    instructions.style.display='flex';
+    instructions.style.opacity=1;
+    instructions.querySelector('div').innerHTML = `<b>Game Over!</b><br>Score: <b>${score}</b><br>Level: ${level}<br>High Score: <b>${highScore}</b><br><br>Tap, click or press any key to play again.`;
+    state = 'instructions';
+  }, 1200);
+}
+
+// --- Render ---
+function render() {
+  // Camera follows player, with shake
+  let camX = clamp(player?.x || GAME_W/2, width/2, GAME_W-width/2);
+  let camY = clamp(player?.y || GAME_H/2, height/2, GAME_H-height/2);
+  if (shake>0) {
+    camX += rand(-shake,shake); camY += rand(-shake,shake);
+    shake *= 0.87;
+  }
+  ctx.clearRect(0,0,width,height);
+  ctx.save();
+  // Parallax BG
+  for (let l=0; l<PARALLAX_LAYERS; ++l) {
+    ctx.save();
+    let px = (camX*PARALLAX_DEPTH[l])%(GAME_W/2);
+    let py = (camY*PARALLAX_DEPTH[l])%(GAME_H/2);
+    ctx.translate(-px, -py);
+    ctx.globalAlpha = 1.0 - l*0.14;
+    for (let s of bgStars?.[l]||[]) {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+      ctx.fillStyle = PARALLAX_COLORS[l];
+      ctx.shadowColor = l<2 ? '#fff' : 'transparent';
+      ctx.shadowBlur = l<2 ? 8-l*3 : 0;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+  ctx.save();
+  ctx.translate(width/2-camX, height/2-camY);
+  // Powerups
+  for (let p of powerups||[]) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.fillStyle = powerupColor(p.type);
+    ctx.shadowColor = powerupColor(p.type);
+    ctx.shadowBlur = 18;
+    ctx.globalAlpha = 0.82 + 0.18*Math.sin(performance.now()/180+p.x);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size*0.5, 0, Math.PI*2);
+    ctx.strokeStyle = '#fff';
+    ctx.globalAlpha = 0.4;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Bullets
+  for (let b of bullets||[]) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.size, 0, Math.PI*2);
+    ctx.fillStyle = b.color;
+    ctx.shadowColor = b.color;
+    ctx.shadowBlur = 16;
+    ctx.globalAlpha = 0.9;
+    ctx.fill();
+    ctx.restore();
+  }
+  // Enemies
+  for (let e of enemies||[]) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.size, 0, Math.PI*2);
+    ctx.fillStyle = e.color;
+    ctx.shadowColor = '#f33';
+    ctx.shadowBlur = 18;
+    ctx.globalAlpha = 0.92;
+    ctx.fill();
+    ctx.restore();
+    if (e.type==='shooter') {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(e.x+Math.cos(performance.now()/180)*e.size*1.2, e.y+Math.sin(performance.now()/180)*e.size*1.2);
+      ctx.strokeStyle = '#fff8';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // Player
+  if (player) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.size, 0, Math.PI*2);
+    ctx.fillStyle = player.color;
+    ctx.shadowColor = '#3af';
+    ctx.shadowBlur = 22;
+    ctx.globalAlpha = 0.98;
+    ctx.fill();
+    ctx.restore();
+    // HP
+    for (let h=0; h<player.hp; ++h) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(player.x-player.size+20+h*22, player.y-player.size-18, 10, 0, Math.PI*2);
+      ctx.fillStyle = '#ff0';
+      ctx.globalAlpha = 0.7;
+      ctx.fill();
+      ctx.restore();
+    }
+    // Shield effect
+    if (powerupActive==='shield' && player.invuln>0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.size+16*Math.abs(Math.sin(performance.now()/200)), 0, Math.PI*2);
+      ctx.strokeStyle = '#ff0';
+      ctx.globalAlpha = 0.4+0.2*Math.sin(performance.now()/300);
+      ctx.lineWidth = 7;
+      ctx.shadowColor = '#ff0';
+      ctx.shadowBlur = 18;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // Particles
+  for (let p of particles||[]) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = clamp(p.life/18,0,1)*0.8;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 14;
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+  // Virtual Joysticks (Mobile)
+  if (isMobile && state==='playing') {
+    drawStick(width*0.22, height*0.7, leftStick);
+    drawStick(width*0.78, height*0.7, rightStick);
+  }
+}
+function drawStick(cx,cy,stick) {
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.beginPath();
+  ctx.arc(cx, cy, width*0.16, 0, Math.PI*2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  if (stick.active) {
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.arc(stick.x, stick.y, width*0.07, 0, Math.PI*2);
+    ctx.fillStyle = '#3af';
+    ctx.fill();
+  }
+  ctx.restore();
+}
+  </script>
+</body>
+</html>
