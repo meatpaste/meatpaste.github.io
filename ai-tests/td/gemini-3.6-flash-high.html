@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>HYPER MERGE 3D: Rogue Tower Defense</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0a0c16;
+      --panel-bg: rgba(15, 23, 42, 0.75);
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --accent-cyan: #00f0ff;
+      --accent-magenta: #ff007f;
+      --accent-gold: #ffd700;
+      --accent-purple: #9d4edd;
+      --accent-green: #00ff88;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-heading: 'Outfit', sans-serif;
+      --font-code: 'Space Grotesk', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+      touch-action: manipulation;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      font-family: var(--font-heading);
+      color: var(--text-main);
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* UI Overlay */
+    .ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    /* Top HUD */
+    .top-hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      width: 100%;
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .stat-icon {
+      font-size: 1.4rem;
+    }
+
+    .stat-val {
+      font-size: 1.2rem;
+      font-weight: 800;
+      font-family: var(--font-code);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .hp-bar-container {
+      width: 140px;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .hp-bar-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #ff0055, #ff5500);
+      transition: width 0.3s ease;
+    }
+
+    .hud-controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-icon:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+    }
+
+    .btn-icon:active {
+      transform: translateY(1px);
+    }
+
+    /* Wave Progress Indicator */
+    .wave-banner {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      padding: 8px 20px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    .wave-title {
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: var(--accent-cyan);
+      letter-spacing: 1.5px;
+    }
+
+    .wave-sub {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    /* Bottom Action Dock */
+    .bottom-dock {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    .btn-action {
+      background: linear-gradient(135deg, #00f0ff 0%, #7000ff 100%);
+      border: none;
+      border-radius: 16px;
+      padding: 14px 28px;
+      color: #fff;
+      font-family: var(--font-heading);
+      font-weight: 800;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .btn-action:hover {
+      transform: translateY(-4px) scale(1.03);
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.7);
+    }
+
+    .btn-action:disabled {
+      opacity: 0.5;
+      filter: grayscale(1);
+      transform: none;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .btn-subtext {
+      font-size: 0.75rem;
+      font-weight: 600;
+      opacity: 0.9;
+    }
+
+    .btn-secondary {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 12px 20px;
+      color: var(--text-main);
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent-magenta);
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+    }
+
+    /* Modal Overlay Base */
+    .modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(5, 7, 15, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      padding: 20px;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-box {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--panel-border);
+      border-radius: 24px;
+      padding: 32px;
+      max-width: 550px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 240, 255, 0.15);
+      transform: scale(0.9);
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-overlay.active .modal-box {
+      transform: scale(1);
+    }
+
+    .modal-title {
+      font-size: 2.2rem;
+      font-weight: 900;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #00f0ff, #ff007f);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .modal-desc {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    /* Cards Grid for Rogue Perks */
+    .perk-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .perk-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .perk-card:hover {
+      transform: translateY(-6px) scale(1.02);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 10px 25px rgba(0, 240, 255, 0.3);
+      background: rgba(0, 240, 255, 0.08);
+    }
+
+    .perk-card.rare {
+      border-color: rgba(157, 78, 221, 0.5);
+    }
+
+    .perk-card.rare:hover {
+      border-color: var(--accent-purple);
+      box-shadow: 0 10px 25px rgba(157, 78, 221, 0.4);
+    }
+
+    .perk-card.legendary {
+      border-color: rgba(255, 215, 0, 0.6);
+    }
+
+    .perk-card.legendary:hover {
+      border-color: var(--accent-gold);
+      box-shadow: 0 10px 25px rgba(255, 215, 0, 0.5);
+    }
+
+    .perk-icon {
+      font-size: 2.2rem;
+      margin-bottom: 12px;
+    }
+
+    .perk-name {
+      font-weight: 800;
+      font-size: 1rem;
+      margin-bottom: 6px;
+    }
+
+    .perk-text {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.3;
+    }
+
+    .rarity-tag {
+      font-size: 0.65rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .rarity-tag.common { color: var(--accent-cyan); }
+    .rarity-tag.rare { color: var(--accent-purple); background: rgba(157, 78, 221, 0.2); }
+    .rarity-tag.legendary { color: var(--accent-gold); background: rgba(255, 215, 0, 0.2); }
+
+    /* Meta Shop List */
+    .shop-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+
+    .shop-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .shop-info-title {
+      font-weight: 800;
+      font-size: 1rem;
+    }
+
+    .shop-info-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .btn-buy-upgrade {
+      background: linear-gradient(135deg, var(--accent-gold), #ff8800);
+      border: none;
+      color: #000;
+      font-weight: 800;
+      padding: 8px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: var(--font-heading);
+      transition: all 0.2s ease;
+    }
+
+    .btn-buy-upgrade:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+    }
+
+    .btn-buy-upgrade:disabled {
+      opacity: 0.4;
+      transform: none;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    /* Floating Combat Text Container */
+    #damage-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 20;
+      overflow: hidden;
+    }
+
+    .float-text {
+      position: absolute;
+      font-weight: 900;
+      font-family: var(--font-code);
+      pointer-events: none;
+      animation: floatUp 0.8s ease-out forwards;
+      text-shadow: 0 0 6px rgba(0,0,0,0.9);
+      white-space: nowrap;
+    }
+
+    @keyframes floatUp {
+      0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(-40px) scale(1.2);
+      }
+    }
+
+    /* Floating Info Tooltip */
+    .tower-tooltip {
+      position: absolute;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 10px 18px;
+      font-size: 0.85rem;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+
+    .tower-tooltip.visible {
+      opacity: 1;
+    }
+
+    /* Responsive styling */
+    @media (max-width: 600px) {
+      .ui-layer { padding: 10px; }
+      .stat-card { padding: 6px 10px; gap: 6px; }
+      .stat-val { font-size: 1rem; }
+      .stat-icon { font-size: 1.1rem; }
+      .hp-bar-container { width: 90px; }
+      .btn-action { padding: 12px 20px; font-size: 0.95rem; }
+      .modal-box { padding: 20px; }
+      .modal-title { font-size: 1.7rem; }
+      .perk-cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 3D Canvas Mount -->
+  <div id="canvas-container"></div>
+  <div id="damage-overlay"></div>
+
+  <!-- Main Game HUD -->
+  <div class="ui-layer">
+    <!-- Top HUD -->
+    <div class="top-hud">
+      <div class="stat-card interactive">
+        <span class="stat-icon">❤️</span>
+        <div>
+          <div class="stat-label">Core Health</div>
+          <div class="hp-bar-container">
+            <div id="hp-bar" class="hp-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wave-banner interactive">
+        <div id="wave-text" class="wave-title">WAVE 1</div>
+        <div id="wave-subtext" class="wave-sub">Preparing Defense...</div>
+      </div>
+
+      <div class="hud-controls interactive">
+        <div class="stat-card">
+          <span class="stat-icon">⚡</span>
+          <div>
+            <div class="stat-label">Gold</div>
+            <div id="gold-val" class="stat-val" style="color: var(--accent-gold);">100</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-icon">💎</span>
+          <div>
+            <div class="stat-label">Gems</div>
+            <div id="gems-val" class="stat-val" style="color: var(--accent-cyan);">0</div>
+          </div>
+        </div>
+        <button id="btn-speed" class="btn-icon" title="Toggle Speed">1x</button>
+        <button id="btn-pause" class="btn-icon" title="Pause Game">⏸️</button>
+      </div>
+    </div>
+
+    <!-- Tower Tooltip -->
+    <div id="tower-tooltip" class="tower-tooltip">
+      <div><strong id="tt-name" style="color:var(--accent-cyan)">Tier 1 Plasma Cannon</strong></div>
+      <div>DPS: <span id="tt-dps" style="color:var(--accent-gold)">15</span></div>
+      <div>Range: <span id="tt-range">3.5</span></div>
+    </div>
+
+    <!-- Bottom Dock -->
+    <div class="bottom-dock interactive">
+      <button id="btn-spawn" class="btn-action">
+        <span>SPAWN TOWER</span>
+        <span id="spawn-cost-text" class="btn-subtext">⚡ 10 Gold</span>
+      </button>
+
+      <button id="btn-automerge" class="btn-secondary">
+        🔄 AUTO MERGE
+      </button>
+
+      <button id="btn-sell" class="btn-secondary" style="display:none; border-color:var(--accent-magenta);">
+        🗑️ SELL TOWER
+      </button>
+    </div>
+  </div>
+
+  <!-- Start / Main Menu Modal -->
+  <div id="modal-start" class="modal-overlay active">
+    <div class="modal-box">
+      <h1 class="modal-title">HYPER MERGE 3D</h1>
+      <p class="modal-desc">Synthesize defensive turrets, combine matching tiers to unleash mega cannons, draft powerful rogue abilities, and defend the core grid!</p>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+        <button id="btn-play-game" class="btn-action" style="width: 100%; font-size: 1.3rem; padding: 16px;">
+          🚀 START DEFENSE RUN
+        </button>
+        <button id="btn-open-shop" class="btn-secondary" style="width: 100%;">
+          💎 CYBER MATRIX UPGRADES
+        </button>
+      </div>
+
+      <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">
+        💡 <strong>How to Play:</strong> Click/Tap <em>Spawn Tower</em> to place turrets. Drag matching level turrets onto each other to <strong>MERGE</strong> them into stronger Tiers! Defeat bosses to earn Rogue Skill Cards.
+      </div>
+    </div>
+  </div>
+
+  <!-- Rogue Perk Selection Modal -->
+  <div id="modal-perks" class="modal-overlay">
+    <div class="modal-box" style="max-width: 650px;">
+      <h2 class="modal-title">SYSTEM UPGRADE DRAFT</h2>
+      <p class="modal-desc">Choose a Rogue Protocol perk to augment your defensive grid for the remaining run!</p>
+      
+      <div id="perk-cards-container" class="perk-cards">
+        <!-- Dynamic Perk Cards Inserted Here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Meta Shop Upgrade Modal -->
+  <div id="modal-shop" class="modal-overlay">
+    <div class="modal-box">
+      <h2 class="modal-title">CYBER MATRIX</h2>
+      <p class="modal-desc">Spend Gems collected from runs to permanently boost stats across all future defense sessions!</p>
+      
+      <div class="stat-card" style="justify-content: center; margin-bottom: 16px;">
+        <span class="stat-icon">💎</span>
+        <span id="shop-gems-val" class="stat-val" style="color:var(--accent-cyan); font-size: 1.4rem;">0</span>
+        <span style="font-size: 0.8rem; color:var(--text-muted)">AVAILABLE GEMS</span>
+      </div>
+
+      <div id="shop-items-container" class="shop-list">
+        <!-- Dynamic Shop Items -->
+      </div>
+
+      <button id="btn-close-shop" class="btn-secondary" style="width: 100%;">
+        ⬅️ RETURN TO MENU
+      </button>
+    </div>
+  </div>
+
+  <!-- Game Over Modal -->
+  <div id="modal-gameover" class="modal-overlay">
+    <div class="modal-box">
+      <h2 id="go-title" class="modal-title" style="color: var(--accent-magenta);">DEFENSE BREACHED</h2>
+      <p id="go-sub" class="modal-desc">The core succumbed to enemy waves.</p>
+
+      <div style="background: rgba(0,0,0,0.3); border-radius: 16px; padding: 16px; margin-bottom: 24px; text-align: left; font-family: var(--font-code);">
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+          <span>WAVES SURVIVED:</span>
+          <strong id="go-waves" style="color:var(--accent-cyan)">0</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+          <span>ENEMIES DESTROYED:</span>
+          <strong id="go-kills" style="color:var(--accent-green)">0</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+          <span>HIGHEST TOWER MERGED:</span>
+          <strong id="go-tier" style="color:var(--accent-purple)">Tier 1</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; border-top: 1px solid var(--panel-border); padding-top: 8px;">
+          <span>CYBER GEMS EARNED:</span>
+          <strong id="go-gems" style="color:var(--accent-gold)">+0 💎</strong>
+        </div>
+      </div>
+
+      <div style="display:flex; gap: 12px;">
+        <button id="btn-restart" class="btn-action" style="flex:1;">
+          🔄 TRY AGAIN
+        </button>
+        <button id="btn-menu-from-go" class="btn-secondary">
+          🏠 MAIN MENU
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- GAME ENGINE CODE -->
+  <script>
+    /* =========================================================================
+       1. SOUND SYNTHESIZER (Web Audio API - 0 External Dependencies)
+       ========================================================================= */
+    class SoundFx {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playShoot(type = 'plasma') {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        if (type === 'plasma') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.exponentialRampToValueAtTime(110, now + 0.08);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+          osc.start(now);
+          osc.stop(now + 0.08);
+        } else if (type === 'laser') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(800, now);
+          osc.frequency.linearRampToValueAtTime(1200, now + 0.1);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        } else if (type === 'mortar') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+          osc.start(now);
+          osc.stop(now + 0.2);
+        }
+      }
+
+      playMerge() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(261.63, now); // C4
+        osc.frequency.exponentialRampToValueAtTime(523.25, now + 0.15); // C5
+        osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.3); // C6
+
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+
+      playExplosion() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(20, now + 0.25);
+
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+
+      playPowerup() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.linearRampToValueAtTime(800, now + 0.4);
+
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+        osc.start(now);
+        osc.stop(now + 0.4);
+      }
+    }
+
+    const sfx = new SoundFx();
+
+
+    /* =========================================================================
+       2. TOWER DEFINITIONS & ROGUE PERK SYSTEM
+       ========================================================================= */
+    const TOWER_TYPES = [
+      { id: 'plasma', name: 'Plasma Blaster', color: 0x00f0ff, type: 'single', baseDps: 15, range: 3.8, projSpeed: 16 },
+      { id: 'tesla', name: 'Tesla Coil', color: 0x9d4edd, type: 'chain', baseDps: 22, range: 3.2, projSpeed: 25 },
+      { id: 'frost', name: 'Frost Nova', color: 0x00a8ff, type: 'slow', baseDps: 10, range: 3.0, projSpeed: 10 },
+      { id: 'inferno', name: 'Inferno Mortar', color: 0xff3300, type: 'aoe', baseDps: 35, range: 4.5, projSpeed: 8 },
+      { id: 'void', name: 'Void Beam', color: 0x00ff88, type: 'beam', baseDps: 45, range: 4.0, projSpeed: 50 }
+    ];
+
+    const PERK_DATABASE = [
+      { id: 'atk_speed', name: 'Overclock Grid', text: '+25% Attack Speed for all turrets.', rarity: 'common', icon: '⚡', apply: (g) => { g.stats.atkSpeedMult *= 1.25; } },
+      { id: 'crit_fusion', name: 'Quantum Fusion', text: '20% chance on merge to upgrade +2 levels instead of +1!', rarity: 'rare', icon: '⚛️', apply: (g) => { g.stats.critMergeChance += 0.20; } },
+      { id: 'gold_interest', name: 'Crypto Interest', text: 'Earn 10% interest on current gold at wave end.', rarity: 'common', icon: '📈', apply: (g) => { g.stats.interestRate += 0.10; } },
+      { id: 'range_boost', name: 'Hyper Optics', text: '+20% Tower Attack Range across all grid tiles.', rarity: 'common', icon: '🔭', apply: (g) => { g.stats.rangeMult *= 1.20; } },
+      { id: 'chain_lightning', name: 'Overcharged Coil', text: 'Tesla Coils bounce +2 extra times to nearby foes.', rarity: 'rare', icon: '🌩️', apply: (g) => { g.stats.chainBounces += 2; } },
+      { id: 'frost_freeze', name: 'Absolute Zero', text: 'Frost turrets slow enemies by an additional 25%.', rarity: 'rare', icon: '❄️', apply: (g) => { g.stats.frostSlowBonus += 0.25; } },
+      { id: 'merge_boom', name: 'Subatomic Shockwave', text: 'Merging turrets emits a plasma blast damaging all screen foes.', rarity: 'legendary', icon: '💥', apply: (g) => { g.stats.mergeExplode = true; } },
+      { id: 'boss_bounty', name: 'Titan Scraps', text: 'Defeating Bosses yields +50 bonus Gold and +5 Gems instantly.', rarity: 'legendary', icon: '👑', apply: (g) => { g.stats.bossBounty = true; } },
+      { id: 'core_repair', name: 'Nanite Shield', text: 'Restores +20 Core HP and increases Max HP by +25.', rarity: 'common', icon: '🛡️', apply: (g) => { g.maxHp += 25; g.hp = Math.min(g.maxHp, g.hp + 20); g.updateHUD(); } }
+    ];
+
+    /* =========================================================================
+       3. META PROGRESSION (SAVED IN LOCALSTORAGE)
+       ========================================================================= */
+    class MetaProgression {
+      constructor() {
+        this.data = {
+          gems: 0,
+          highWave: 1,
+          upgrades: {
+            starterGold: 0, // +30 gold per level
+            baseHp: 0,       // +20 hp per level
+            mergeLuck: 0,    // +5% super merge per level
+            spawnDiscount: 0 // -5% spawn cost per level
+          }
+        };
+        this.load();
+      }
+
+      load() {
+        try {
+          const saved = localStorage.getItem('HYPER_MERGE_META_V1');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            this.data = { ...this.data, ...parsed };
+          }
+        } catch (e) {
+          console.warn("Could not load saved data", e);
+        }
+      }
+
+      save() {
+        try {
+          localStorage.setItem('HYPER_MERGE_META_V1', JSON.stringify(this.data));
+        } catch (e) {
+          console.warn("Could not save meta data", e);
+        }
+      }
+
+      getCost(key) {
+        const lvl = this.data.upgrades[key] || 0;
+        return Math.floor(10 * Math.pow(1.8, lvl));
+      }
+
+      buyUpgrade(key) {
+        const cost = this.getCost(key);
+        if (this.data.gems >= cost) {
+          this.data.gems -= cost;
+          this.data.upgrades[key] = (this.data.upgrades[key] || 0) + 1;
+          this.save();
+          return true;
+        }
+        return false;
+      }
+    }
+
+    const meta = new MetaProgression();
+
+
+    /* =========================================================================
+       4. GAME STATE & 3D SCENE MANAGEMENT
+       ========================================================================= */
+    class Game {
+      constructor() {
+        this.container = document.getElementById('canvas-container');
+        this.overlay = document.getElementById('damage-overlay');
+
+        // Scene setup
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x0a0c16);
+        this.scene.fog = new THREE.FogExp2(0x0a0c16, 0.025);
+
+        // Camera setup
+        this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera.position.set(0, 15, 14);
+        this.camera.lookAt(0, 0, 0);
+
+        // Renderer setup
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.container.appendChild(this.renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        this.scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 40;
+        dirLight.shadow.camera.left = -12;
+        dirLight.shadow.camera.right = 12;
+        dirLight.shadow.camera.top = 12;
+        dirLight.shadow.camera.bottom = -12;
+        this.scene.add(dirLight);
+
+        // Point Light for center glow
+        const pointLight = new THREE.PointLight(0x00f0ff, 1, 20);
+        pointLight.position.set(0, 5, 0);
+        this.scene.add(pointLight);
+
+        // Grid & Pathing
+        this.gridSize = 4; // 4x4 tower grid
+        this.tiles = [];
+        this.towers = new Array(16).fill(null);
+        this.pathPoints = [];
+        this.enemies = [];
+        this.projectiles = [];
+        this.particles = [];
+
+        // Game Loop Variables
+        this.isRunning = false;
+        this.isPaused = false;
+        this.speedMult = 1;
+        this.wave = 1;
+        this.gold = 100;
+        this.gemsEarnedRun = 0;
+        this.maxHp = 100;
+        this.hp = 100;
+        this.spawnCost = 10;
+        this.totalKills = 0;
+        this.highestTier = 1;
+        this.selectedTileIndex = null;
+
+        // Mouse / Dragging Interaction
+        this.raycaster = new THREE.Raycaster();
+        this.mouse = new THREE.Vector2();
+        this.draggedTower = null;
+        this.draggedSlotIndex = null;
+        this.dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+        // Stats & Perks
+        this.resetStats();
+
+        // Build Environment & Init Listeners
+        this.buildMap();
+        this.setupEvents();
+        this.updateHUD();
+
+        // Render Loop
+        this.lastTime = performance.now();
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+      }
+
+      resetStats() {
+        this.stats = {
+          atkSpeedMult: 1.0,
+          rangeMult: 1.0,
+          critMergeChance: 0.0,
+          interestRate: 0.0,
+          chainBounces: 2,
+          frostSlowBonus: 0.0,
+          mergeExplode: false,
+          bossBounty: false
+        };
+      }
+
+      /* =========================================================================
+         5. MAP & GRID CREATION
+         ========================================================================= */
+      buildMap() {
+        // Clear old objects if re-building
+        // Create Winding Path for enemies
+        this.pathPoints = [
+          new THREE.Vector3(-9, 0.2, -6),
+          new THREE.Vector3(-4, 0.2, -6),
+          new THREE.Vector3(-4, 0.2, 5),
+          new THREE.Vector3(4, 0.2, 5),
+          new THREE.Vector3(4, 0.2, -5),
+          new THREE.Vector3(9, 0.2, -5)
+        ];
+
+        // Draw Path Visual Tube / Strip
+        const pathCurve = new THREE.CatmullRomCurve3(this.pathPoints);
+        const pathGeo = new THREE.TubeGeometry(pathCurve, 64, 0.45, 8, false);
+        const pathMat = new THREE.MeshStandardMaterial({
+          color: 0x1e293b,
+          emissive: 0x00f0ff,
+          emissiveIntensity: 0.15,
+          roughness: 0.4
+        });
+        const pathMesh = new THREE.Mesh(pathGeo, pathMat);
+        pathMesh.receiveShadow = true;
+        this.scene.add(pathMesh);
+
+        // Spawn Portal (Start)
+        const portalGeo = new THREE.TorusGeometry(0.8, 0.15, 16, 32);
+        const portalMat = new THREE.MeshBasicMaterial({ color: 0xff007f });
+        const startPortal = new THREE.Mesh(portalGeo, portalMat);
+        startPortal.position.copy(this.pathPoints[0]);
+        startPortal.rotation.x = Math.PI / 2;
+        this.scene.add(startPortal);
+
+        // Core Portal (End)
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
+        const endPortal = new THREE.Mesh(portalGeo, coreMat);
+        endPortal.position.copy(this.pathPoints[this.pathPoints.length - 1]);
+        endPortal.rotation.x = Math.PI / 2;
+        this.scene.add(endPortal);
+
+        // Tower Grid Tiles (4x4 Matrix placed around central arena)
+        const tileGeo = new THREE.BoxGeometry(1.6, 0.2, 1.6);
+        const startX = -2.4;
+        const startZ = -2.4;
+
+        let index = 0;
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            const posX = startX + c * 1.6;
+            const posZ = startZ + r * 1.6;
+
+            // Tile Material with hover effect capability
+            const tileMat = new THREE.MeshStandardMaterial({
+              color: 0x10172a,
+              roughness: 0.5,
+              metalness: 0.8
+            });
+            const tile = new THREE.Mesh(tileGeo, tileMat);
+            tile.position.set(posX, 0.1, posZ);
+            tile.receiveShadow = true;
+            tile.userData = { isTile: true, index: index };
+
+            // Tile Border outline
+            const edgesGeo = new THREE.EdgesGeometry(tileGeo);
+            const edgesMat = new THREE.LineBasicMaterial({ color: 0x334155 });
+            const edges = new THREE.LineSegments(edgesGeo, edgesMat);
+            tile.add(edges);
+
+            this.scene.add(tile);
+            this.tiles.push(tile);
+            index++;
+          }
+        }
+
+        // Ground Plane Base
+        const groundGeo = new THREE.PlaneGeometry(30, 30);
+        const groundMat = new THREE.MeshStandardMaterial({
+          color: 0x05070f,
+          roughness: 0.9,
+          metalness: 0.1
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = 0;
+        ground.receiveShadow = true;
+        this.scene.add(ground);
+
+        // Grid lines overlay on ground
+        const gridHelper = new THREE.GridHelper(30, 30, 0x00f0ff, 0x1e293b);
+        gridHelper.position.y = 0.01;
+        this.scene.add(gridHelper);
+      }
+
+      /* =========================================================================
+         6. PROCEDURAL TOWER CREATION & MERGING LOGIC
+         ========================================================================= */
+      createTowerMesh(typeObj, level) {
+        const group = new THREE.Group();
+
+        // Base Pedestal
+        const baseGeo = new THREE.CylinderGeometry(0.65, 0.7, 0.3, 8);
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 });
+        const base = new THREE.Mesh(baseGeo, baseMat);
+        base.position.y = 0.15;
+        base.castShadow = true;
+        group.add(base);
+
+        // Main Turret Body
+        let bodyGeo;
+        if (typeObj.id === 'plasma') bodyGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.6, 8);
+        else if (typeObj.id === 'tesla') bodyGeo = new THREE.SphereGeometry(0.4, 8, 8);
+        else if (typeObj.id === 'frost') bodyGeo = new THREE.OctahedronGeometry(0.45, 0);
+        else if (typeObj.id === 'inferno') bodyGeo = new THREE.BoxGeometry(0.7, 0.5, 0.7);
+        else bodyGeo = new THREE.ConeGeometry(0.4, 0.8, 6);
+
+        const bodyMat = new THREE.MeshStandardMaterial({
+          color: typeObj.color,
+          metalness: 0.6,
+          roughness: 0.2,
+          emissive: typeObj.color,
+          emissiveIntensity: 0.2 + level * 0.08
+        });
+
+        const body = new THREE.Mesh(bodyGeo, bodyMat);
+        body.position.y = 0.6;
+        body.castShadow = true;
+        group.add(body);
+
+        // Level Indicators (Floating Glowing Spheres on top based on Tier)
+        const ringGeo = new THREE.TorusGeometry(0.5, 0.04, 8, 16);
+        const ringMat = new THREE.MeshBasicMaterial({ color: typeObj.color });
+        for (let l = 0; l < Math.min(level, 5); l++) {
+          const ring = new THREE.Mesh(ringGeo, ringMat);
+          ring.rotation.x = Math.PI / 2;
+          ring.position.y = 0.3 + l * 0.15;
+          ring.scale.setScalar(1 - l * 0.1);
+          group.add(ring);
+        }
+
+        group.userData = {
+          type: typeObj,
+          level: level,
+          dps: Math.floor(typeObj.baseDps * Math.pow(2.1, level - 1)),
+          range: typeObj.range * this.stats.rangeMult,
+          lastShotTime: 0
+        };
+
+        return group;
+      }
+
+      spawnTower() {
+        if (this.gold < this.spawnCost) return;
+
+        // Find empty grid slots
+        const emptyIndices = [];
+        this.towers.forEach((t, i) => { if (t === null) emptyIndices.push(i); });
+
+        if (emptyIndices.length === 0) {
+          this.showFloatText("GRID FULL!", window.innerWidth / 2, window.innerHeight / 2, "#ff0055");
+          return;
+        }
+
+        this.gold -= this.spawnCost;
+        this.spawnCost = Math.floor(this.spawnCost * 1.12);
+
+        // Pick random empty slot
+        const slotIdx = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+        const randomType = TOWER_TYPES[Math.floor(Math.random() * TOWER_TYPES.length)];
+
+        const towerMesh = this.createTowerMesh(randomType, 1);
+        const tilePos = this.tiles[slotIdx].position;
+        towerMesh.position.set(tilePos.x, tilePos.y, tilePos.z);
+
+        this.scene.add(towerMesh);
+        this.towers[slotIdx] = towerMesh;
+
+        sfx.playPowerup();
+        this.spawnParticles(tilePos, randomType.color, 15);
+        this.updateHUD();
+      }
+
+      mergeTowers(fromIndex, toIndex) {
+        const t1 = this.towers[fromIndex];
+        const t2 = this.towers[toIndex];
+
+        if (!t1 || !t2 || fromIndex === toIndex) return false;
+
+        // Check if mergeable (Same level)
+        if (t1.userData.level === t2.userData.level) {
+          const nextLevel = t1.userData.level + 1;
+          const isCrit = Math.random() < (this.stats.critMergeChance + (meta.data.upgrades.mergeLuck * 0.05));
+          const finalLevel = isCrit ? nextLevel + 1 : nextLevel;
+
+          if (finalLevel > this.highestTier) this.highestTier = finalLevel;
+
+          // Pick random new type or upgraded type
+          const newType = TOWER_TYPES[Math.floor(Math.random() * TOWER_TYPES.length)];
+
+          // Remove both old towers
+          this.scene.remove(t1);
+          this.scene.remove(t2);
+          this.towers[fromIndex] = null;
+          this.towers[toIndex] = null;
+
+          // Create new higher tier tower
+          const newTowerMesh = this.createTowerMesh(newType, finalLevel);
+          const targetTilePos = this.tiles[toIndex].position;
+          newTowerMesh.position.set(targetTilePos.x, targetTilePos.y, targetTilePos.z);
+
+          this.scene.add(newTowerMesh);
+          this.towers[toIndex] = newTowerMesh;
+
+          // Effects & Sound
+          sfx.playMerge();
+          this.spawnParticles(targetTilePos, newType.color, 30);
+
+          if (isCrit) {
+            this.showFloatText("SUPER MERGE! +2 Tiers", window.innerWidth / 2, window.innerHeight / 2, "#ffd700");
+          }
+
+          if (this.stats.mergeExplode) {
+            // Damage all active enemies
+            this.enemies.forEach(e => {
+              e.hp -= 150 * finalLevel;
+            });
+            sfx.playExplosion();
+          }
+
+          this.updateHUD();
+          return true;
+        } else {
+          // Swap positions if different levels
+          const pos1 = this.tiles[fromIndex].position;
+          const pos2 = this.tiles[toIndex].position;
+
+          t1.position.set(pos2.x, pos2.y, pos2.z);
+          t2.position.set(pos1.x, pos1.y, pos1.z);
+
+          this.towers[fromIndex] = t2;
+          this.towers[toIndex] = t1;
+
+          return true;
+        }
+      }
+
+      autoMerge() {
+        let merged = false;
+        for (let i = 0; i < this.towers.length; i++) {
+          if (!this.towers[i]) continue;
+          for (let j = i + 1; j < this.towers.length; j++) {
+            if (!this.towers[j]) continue;
+
+            if (this.towers[i].userData.level === this.towers[j].userData.level) {
+              this.mergeTowers(i, j);
+              merged = true;
+              break;
+            }
+          }
+          if (merged) break;
+        }
+      }
+
+
+      /* =========================================================================
+         7. WAVE & ENEMY SPAWNING SYSTEM
+         ========================================================================= */
+      startWave() {
+        this.waveEnemiesRemaining = 10 + this.wave * 4;
+        this.spawnTimer = 0;
+        this.isWaveActive = true;
+        document.getElementById('wave-text').innerText = `WAVE ${this.wave}`;
+        document.getElementById('wave-subtext').innerText = `Defend the Grid!`;
+      }
+
+      spawnEnemy() {
+        const isBoss = (this.waveEnemiesRemaining === 1) && (this.wave % 5 === 0);
+        const hpBase = (20 + Math.pow(this.wave, 1.85) * 15);
+        const hp = isBoss ? hpBase * 6 : hpBase;
+
+        const group = new THREE.Group();
+
+        let geo, color;
+        if (isBoss) {
+          geo = new THREE.DodecahedronGeometry(0.85);
+          color = 0xff0055;
+        } else {
+          const type = Math.random();
+          if (type < 0.4) { geo = new THREE.SphereGeometry(0.35, 8, 8); color = 0x00f0ff; }
+          else if (type < 0.7) { geo = new THREE.BoxGeometry(0.6, 0.6, 0.6); color = 0x9d4edd; }
+          else { geo = new THREE.ConeGeometry(0.4, 0.7, 6); color = 0xffaa00; }
+        }
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: color,
+          emissive: color,
+          emissiveIntensity: 0.3,
+          roughness: 0.3
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.castShadow = true;
+        group.add(mesh);
+
+        // Position at start portal
+        group.position.copy(this.pathPoints[0]);
+
+        group.userData = {
+          hp: hp,
+          maxHp: hp,
+          speed: isBoss ? 1.5 : (2.2 + Math.min(this.wave * 0.05, 1.5)),
+          pathIndex: 0,
+          isBoss: isBoss,
+          color: color
+        };
+
+        this.scene.add(group);
+        this.enemies.push(group);
+      }
+
+      /* =========================================================================
+         8. PROJECTILE & TURRET COMBAT LOGIC
+         ========================================================================= */
+      updateTurrets(dt) {
+        const now = performance.now();
+
+        this.towers.forEach(t => {
+          if (!t) return;
+          const u = t.userData;
+          const fireInterval = (1000 / (1.2 * this.stats.atkSpeedMult)) / Math.sqrt(u.level);
+
+          if (now - u.lastShotTime >= fireInterval) {
+            // Find nearest target within range
+            let target = null;
+            let minDist = u.range;
+
+            this.enemies.forEach(e => {
+              const dist = t.position.distanceTo(e.position);
+              if (dist < minDist) {
+                minDist = dist;
+                target = e;
+              }
+            });
+
+            if (target) {
+              u.lastShotTime = now;
+              this.fireProjectile(t, target);
+            }
+          }
+        });
+      }
+
+      fireProjectile(tower, target) {
+        const u = tower.userData;
+        sfx.playShoot(u.type.id);
+
+        if (u.type.id === 'chain') {
+          // Instant lightning strike
+          target.userData.hp -= u.dps;
+          this.spawnLightningEffect(tower.position, target.position, u.type.color);
+          
+          // Bounce
+          let bounces = this.stats.chainBounces;
+          let currentTarget = target;
+          this.enemies.forEach(other => {
+            if (bounces > 0 && other !== currentTarget && tower.position.distanceTo(other.position) <= u.range) {
+              other.userData.hp -= u.dps * 0.7;
+              this.spawnLightningEffect(currentTarget.position, other.position, u.type.color);
+              bounces--;
+            }
+          });
+          return;
+        }
+
+        // Standard Flying Projectile
+        const projGeo = new THREE.SphereGeometry(0.15, 8, 8);
+        const projMat = new THREE.MeshBasicMaterial({ color: u.type.color });
+        const proj = new THREE.Mesh(projGeo, projMat);
+        proj.position.copy(tower.position);
+        proj.position.y += 0.6;
+
+        proj.userData = {
+          target: target,
+          speed: u.type.projSpeed,
+          damage: u.dps,
+          type: u.type.id,
+          color: u.type.color
+        };
+
+        this.scene.add(proj);
+        this.projectiles.push(proj);
+      }
+
+      updateProjectiles(dt) {
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+          const p = this.projectiles[i];
+
+          if (!p.userData.target || !this.enemies.includes(p.userData.target)) {
+            this.scene.remove(p);
+            this.projectiles.splice(i, 1);
+            continue;
+          }
+
+          const targetPos = p.userData.target.position;
+          const dir = new THREE.Vector3().subVectors(targetPos, p.position).normalize();
+          p.position.addScaledVector(dir, p.userData.speed * dt);
+
+          if (p.position.distanceTo(targetPos) < 0.4) {
+            // Impact!
+            p.userData.target.userData.hp -= p.userData.damage;
+            this.spawnParticles(p.position, p.userData.color, 8);
+
+            // Area of Effect / Slow bonuses
+            if (p.userData.type === 'frost') {
+              p.userData.target.userData.speed *= (0.7 - this.stats.frostSlowBonus);
+            }
+
+            this.scene.remove(p);
+            this.projectiles.splice(i, 1);
+          }
+        }
+      }
+
+      /* =========================================================================
+         9. ENEMY MOVEMENTS & GAME STATE CHECKS
+         ========================================================================= */
+      updateEnemies(dt) {
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+          const e = this.enemies[i];
+          const u = e.userData;
+
+          // Check if dead
+          if (u.hp <= 0) {
+            const reward = u.isBoss ? 50 : 5 + Math.floor(this.wave * 1.5);
+            this.gold += reward;
+            this.totalKills++;
+
+            if (u.isBoss && this.stats.bossBounty) {
+              this.gold += 50;
+              this.gemsEarnedRun += 5;
+            }
+
+            // Screen space float text for kills
+            const screenPos = this.toScreenPosition(e.position);
+            this.showFloatText(`+${reward}G`, screenPos.x, screenPos.y, "#ffd700");
+
+            sfx.playExplosion();
+            this.spawnParticles(e.position, u.color, u.isBoss ? 40 : 15);
+
+            this.scene.remove(e);
+            this.enemies.splice(i, 1);
+            this.updateHUD();
+            continue;
+          }
+
+          // Path Movement
+          const targetPt = this.pathPoints[u.pathIndex + 1];
+          if (!targetPt) {
+            // Reached core!
+            this.hp -= u.isBoss ? 25 : 10;
+            this.updateHUD();
+            sfx.playExplosion();
+
+            this.scene.remove(e);
+            this.enemies.splice(i, 1);
+
+            if (this.hp <= 0) {
+              this.gameOver();
+            }
+            continue;
+          }
+
+          const dir = new THREE.Vector3().subVectors(targetPt, e.position).normalize();
+          e.position.addScaledVector(dir, u.speed * dt);
+          e.rotation.y += dt * 2;
+
+          if (e.position.distanceTo(targetPt) < 0.2) {
+            u.pathIndex++;
+          }
+        }
+      }
+
+      /* =========================================================================
+         10. PARTICLE & VISUAL EFFECTS
+         ========================================================================= */
+      spawnParticles(pos, colorHex, count = 12) {
+        const pGeo = new THREE.SphereGeometry(0.08, 4, 4);
+        const pMat = new THREE.MeshBasicMaterial({ color: colorHex });
+
+        for (let i = 0; i < count; i++) {
+          const mesh = new THREE.Mesh(pGeo, pMat);
+          mesh.position.copy(pos);
+
+          const vel = new THREE.Vector3(
+            (Math.random() - 0.5) * 6,
+            Math.random() * 4 + 1,
+            (Math.random() - 0.5) * 6
+          );
+
+          this.scene.add(mesh);
+          this.particles.push({ mesh: mesh, vel: vel, life: 0.4 });
+        }
+      }
+
+      spawnLightningEffect(from, to, colorHex) {
+        const lineMat = new THREE.LineBasicMaterial({ color: colorHex, linewidth: 2 });
+        const points = [from.clone().add(new THREE.Vector3(0, 0.5, 0)), to.clone()];
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const line = new THREE.Line(lineGeo, lineMat);
+
+        this.scene.add(line);
+        setTimeout(() => this.scene.remove(line), 80);
+      }
+
+      updateParticles(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.life -= dt;
+          p.mesh.position.addScaledVector(p.vel, dt);
+          p.mesh.scale.setScalar(p.life / 0.4);
+
+          if (p.life <= 0) {
+            this.scene.remove(p.mesh);
+            this.particles.splice(i, 1);
+          }
+        }
+      }
+
+      /* =========================================================================
+         11. UI & ROGUE DRAFT PERK DIALOGS
+         ========================================================================= */
+      showPerkSelection() {
+        this.isPaused = true;
+
+        // Roll 3 random perks from database
+        const shuffled = [...PERK_DATABASE].sort(() => 0.5 - Math.random());
+        const rolled = shuffled.slice(0, 3);
+
+        const container = document.getElementById('perk-cards-container');
+        container.innerHTML = '';
+
+        rolled.forEach(perk => {
+          const card = document.createElement('div');
+          card.className = `perk-card ${perk.rarity}`;
+          card.innerHTML = `
+            <div class="rarity-tag ${perk.rarity}">${perk.rarity}</div>
+            <div class="perk-icon">${perk.icon}</div>
+            <div class="perk-name">${perk.name}</div>
+            <div class="perk-text">${perk.text}</div>
+          `;
+
+          card.onclick = () => {
+            perk.apply(this);
+            sfx.playPowerup();
+            document.getElementById('modal-perks').classList.remove('active');
+            this.isPaused = false;
+            this.startNextWave();
+          };
+
+          container.appendChild(card);
+        });
+
+        document.getElementById('modal-perks').classList.add('active');
+      }
+
+      startNextWave() {
+        this.wave++;
+        // Apply interest
+        if (this.stats.interestRate > 0) {
+          const interest = Math.floor(this.gold * this.stats.interestRate);
+          this.gold += interest;
+        }
+        this.startWave();
+      }
+
+      updateHUD() {
+        document.getElementById('gold-val').innerText = this.gold;
+        document.getElementById('gems-val').innerText = meta.data.gems + this.gemsEarnedRun;
+        document.getElementById('spawn-cost-text').innerText = `⚡ ${this.spawnCost} Gold`;
+        document.getElementById('btn-spawn').disabled = this.gold < this.spawnCost;
+
+        const hpPct = Math.max(0, (this.hp / this.maxHp) * 100);
+        document.getElementById('hp-bar').style.width = `${hpPct}%`;
+      }
+
+      showFloatText(text, x, y, color = "#ffffff") {
+        const el = document.createElement('div');
+        el.className = 'float-text';
+        el.innerText = text;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        el.style.color = color;
+        this.overlay.appendChild(el);
+
+        setTimeout(() => {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        }, 800);
+      }
+
+      toScreenPosition(position) {
+        const vector = position.clone();
+        vector.project(this.camera);
+        return {
+          x: (vector.x * 0.5 + 0.5) * window.innerWidth,
+          y: (-(vector.y * 0.5) + 0.5) * window.innerHeight
+        };
+      }
+
+      /* =========================================================================
+         12. GAME OVER & META SHOP PROCEDURES
+         ========================================================================= */
+      gameOver() {
+        this.isRunning = false;
+        sfx.playExplosion();
+
+        // Calculate Gems earned
+        const gemsEarned = Math.floor(this.wave * 2 + this.totalKills * 0.2) + this.gemsEarnedRun;
+        meta.data.gems += gemsEarned;
+
+        if (this.wave > meta.data.highWave) {
+          meta.data.highWave = this.wave;
+        }
+        meta.save();
+
+        document.getElementById('go-waves').innerText = this.wave;
+        document.getElementById('go-kills').innerText = this.totalKills;
+        document.getElementById('go-tier').innerText = `Tier ${this.highestTier}`;
+        document.getElementById('go-gems').innerText = `+${gemsEarned} 💎`;
+
+        document.getElementById('modal-gameover').classList.add('active');
+      }
+
+      startNewRun() {
+        // Reset Variables
+        this.wave = 1;
+        this.gold = 100 + (meta.data.upgrades.starterGold * 30);
+        this.spawnCost = Math.max(5, 10 - (meta.data.upgrades.spawnDiscount * 1));
+        this.maxHp = 100 + (meta.data.upgrades.baseHp * 20);
+        this.hp = this.maxHp;
+        this.totalKills = 0;
+        this.highestTier = 1;
+        this.gemsEarnedRun = 0;
+        this.resetStats();
+
+        // Clear scene objects
+        this.enemies.forEach(e => this.scene.remove(e));
+        this.projectiles.forEach(p => this.scene.remove(p));
+        this.towers.forEach(t => { if (t) this.scene.remove(t); });
+
+        this.enemies = [];
+        this.projectiles = [];
+        this.towers = new Array(16).fill(null);
+
+        // Hide Modals
+        document.getElementById('modal-start').classList.remove('active');
+        document.getElementById('modal-gameover').classList.remove('active');
+
+        this.isRunning = true;
+        this.isPaused = false;
+        this.updateHUD();
+        this.startWave();
+      }
+
+      renderMetaShop() {
+        document.getElementById('shop-gems-val').innerText = meta.data.gems;
+        const container = document.getElementById('shop-items-container');
+        container.innerHTML = '';
+
+        const shopItems = [
+          { key: 'starterGold', name: 'Starting Gold', desc: '+30 Gold at the start of every run' },
+          { key: 'baseHp', name: 'Fortified Core', desc: '+20 Max HP for the Core' },
+          { key: 'mergeLuck', name: 'Quantum Fusion Luck', desc: '+5% Chance for Super Merges' },
+          { key: 'spawnDiscount', name: 'Tower Manufacturing', desc: '-1 Gold from Base Tower Cost' }
+        ];
+
+        shopItems.forEach(item => {
+          const lvl = meta.data.upgrades[item.key] || 0;
+          const cost = meta.getCost(item.key);
+
+          const div = document.createElement('div');
+          div.className = 'shop-item';
+          div.innerHTML = `
+            <div>
+              <div class="shop-info-title">${item.name} <span style="color:var(--accent-cyan)">(Lvl ${lvl})</span></div>
+              <div class="shop-info-desc">${item.desc}</div>
+            </div>
+            <button class="btn-buy-upgrade" ${meta.data.gems < cost ? 'disabled' : ''}>
+              💎 ${cost}
+            </button>
+          `;
+
+          div.querySelector('.btn-buy-upgrade').onclick = () => {
+            if (meta.buyUpgrade(item.key)) {
+              sfx.playPowerup();
+              this.renderMetaShop();
+            }
+          };
+
+          container.appendChild(div);
+        });
+      }
+
+      /* =========================================================================
+         13. MOUSE, DRAG & TOUCH INTERACTIONS
+         ========================================================================= */
+      setupEvents() {
+        window.addEventListener('resize', () => {
+          this.camera.aspect = window.innerWidth / window.innerHeight;
+          this.camera.updateProjectionMatrix();
+          this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // UI Event Listeners
+        document.getElementById('btn-play-game').onclick = () => { sfx.init(); this.startNewRun(); };
+        document.getElementById('btn-restart').onclick = () => { this.startNewRun(); };
+        document.getElementById('btn-menu-from-go').onclick = () => {
+          document.getElementById('modal-gameover').classList.remove('active');
+          document.getElementById('modal-start').classList.add('active');
+        };
+
+        document.getElementById('btn-open-shop').onclick = () => {
+          this.renderMetaShop();
+          document.getElementById('modal-shop').classList.add('active');
+        };
+        document.getElementById('btn-close-shop').onclick = () => {
+          document.getElementById('modal-shop').classList.remove('active');
+        };
+
+        document.getElementById('btn-spawn').onclick = () => this.spawnTower();
+        document.getElementById('btn-automerge').onclick = () => this.autoMerge();
+
+        document.getElementById('btn-speed').onclick = (e) => {
+          if (this.speedMult === 1) { this.speedMult = 2; e.target.innerText = '2x'; }
+          else if (this.speedMult === 2) { this.speedMult = 3; e.target.innerText = '3x'; }
+          else { this.speedMult = 1; e.target.innerText = '1x'; }
+        };
+
+        document.getElementById('btn-pause').onclick = (e) => {
+          this.isPaused = !this.isPaused;
+          e.target.innerText = this.isPaused ? '▶️' : '⏸️';
+        };
+
+        // Pointer Drag & Drop for Merging
+        const dom = this.renderer.domElement;
+
+        const onPointerDown = (e) => {
+          sfx.init();
+          this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+          this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+          this.raycaster.setFromCamera(this.mouse, this.camera);
+          const intersects = this.raycaster.intersectObjects(this.tiles);
+
+          if (intersects.length > 0) {
+            const tileIdx = intersects[0].object.userData.index;
+            if (this.towers[tileIdx]) {
+              this.draggedSlotIndex = tileIdx;
+              this.draggedTower = this.towers[tileIdx];
+
+              // Show Tooltip
+              const u = this.draggedTower.userData;
+              document.getElementById('tt-name').innerText = `Tier ${u.level} ${u.type.name}`;
+              document.getElementById('tt-dps').innerText = u.dps;
+              document.getElementById('tt-range').innerText = u.range.toFixed(1);
+              document.getElementById('tower-tooltip').classList.add('visible');
+            }
+          }
+        };
+
+        const onPointerMove = (e) => {
+          if (!this.draggedTower) return;
+          this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+          this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+          this.raycaster.setFromCamera(this.mouse, this.camera);
+          const target = new THREE.Vector3();
+          this.raycaster.ray.intersectPlane(this.dragPlane, target);
+
+          this.draggedTower.position.set(target.x, 0.5, target.z);
+        };
+
+        const onPointerUp = (e) => {
+          document.getElementById('tower-tooltip').classList.remove('visible');
+          if (!this.draggedTower) return;
+
+          this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+          this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+          this.raycaster.setFromCamera(this.mouse, this.camera);
+          const intersects = this.raycaster.intersectObjects(this.tiles);
+
+          let dropIndex = this.draggedSlotIndex;
+          if (intersects.length > 0) {
+            dropIndex = intersects[0].object.userData.index;
+          }
+
+          if (dropIndex !== this.draggedSlotIndex) {
+            this.mergeTowers(this.draggedSlotIndex, dropIndex);
+          } else {
+            // Reset position to tile center
+            const tilePos = this.tiles[this.draggedSlotIndex].position;
+            this.draggedTower.position.set(tilePos.x, tilePos.y, tilePos.z);
+          }
+
+          this.draggedTower = null;
+          this.draggedSlotIndex = null;
+        };
+
+        dom.addEventListener('pointerdown', onPointerDown);
+        dom.addEventListener('pointermove', onPointerMove);
+        dom.addEventListener('pointerup', onPointerUp);
+      }
+
+      /* =========================================================================
+         14. MAIN GAME LOOP
+         ========================================================================= */
+      animate(now) {
+        requestAnimationFrame(this.animate);
+
+        const delta = Math.min((now - this.lastTime) / 1000, 0.1);
+        this.lastTime = now;
+
+        if (this.isRunning && !this.isPaused) {
+          const dt = delta * this.speedMult;
+
+          // Wave Enemy Spawner
+          if (this.isWaveActive) {
+            this.spawnTimer += dt;
+            if (this.spawnTimer >= 1.2 && this.waveEnemiesRemaining > 0) {
+              this.spawnEnemy();
+              this.waveEnemiesRemaining--;
+              this.spawnTimer = 0;
+            }
+
+            if (this.waveEnemiesRemaining === 0 && this.enemies.length === 0) {
+              this.isWaveActive = false;
+              // Wave complete -> Draft Rogue Perk!
+              this.showPerkSelection();
+            }
+          }
+
+          // Entity Updates
+          this.updateTurrets(dt);
+          this.updateProjectiles(dt);
+          this.updateEnemies(dt);
+          this.updateParticles(dt);
+        }
+
+        // Render 3D Scene
+        this.renderer.render(this.scene, this.camera);
+      }
+    }
+
+    // Launch Game Instance on DOM Ready
+    window.addEventListener('DOMContentLoaded', () => {
+      window.game = new Game();
+    });
+  </script>
+</body>
+</html>

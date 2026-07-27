@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Defense: Merge & Conquer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+        #gameContainer {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #canvas {
+            flex: 1;
+            display: block;
+        }
+        #ui {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            border-top: 2px solid #00ff88;
+            min-height: 120px;
+        }
+        .panel {
+            background: rgba(20, 30, 60, 0.8);
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #00ff88;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+        }
+        .stat-sub {
+            font-size: 12px;
+            color: #88ff00;
+            margin-top: 3px;
+        }
+        #wavePanel {
+            grid-column: 1;
+        }
+        #resourcePanel {
+            grid-column: 2;
+        }
+        #scorePanel {
+            grid-column: 3;
+        }
+        #messageBox {
+            grid-column: 1 / -1;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff4488;
+            display: none;
+        }
+        .hidden {
+            display: none !important;
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        #gameOverScreen.show {
+            display: flex;
+        }
+        #gameOverContent {
+            text-align: center;
+        }
+        #gameOverContent h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #ff4488;
+        }
+        #gameOverContent .final-score {
+            font-size: 32px;
+            margin: 20px 0;
+            color: #00ff88;
+        }
+        #gameOverContent .stats-summary {
+            font-size: 14px;
+            margin: 20px 0;
+            color: #aaa;
+        }
+        #restartBtn {
+            margin-top: 30px;
+            padding: 12px 40px;
+            font-size: 18px;
+            background: #00ff88;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        #restartBtn:hover {
+            background: #00dd77;
+            transform: scale(1.05);
+        }
+        .merge-hint {
+            font-size: 11px;
+            color: #ffaa00;
+            margin-top: 3px;
+            text-align: center;
+        }
+        @media (max-width: 768px) {
+            #ui {
+                grid-template-columns: 1fr;
+                min-height: auto;
+            }
+            #wavePanel, #resourcePanel, #scorePanel {
+                grid-column: 1 !important;
+            }
+            .stat-value {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="canvas"></canvas>
+        <div id="ui">
+            <div id="wavePanel" class="panel">
+                <div class="stat-label">Wave</div>
+                <div class="stat-value" id="waveNumber">1</div>
+                <div class="stat-sub" id="waveStatus">Enemies: 0/5</div>
+            </div>
+            <div id="resourcePanel" class="panel">
+                <div class="stat-label">Energy</div>
+                <div class="stat-value" id="resources">100</div>
+                <div class="stat-sub" id="resourcesDetail">Used: 0</div>
+            </div>
+            <div id="scorePanel" class="panel">
+                <div class="stat-label">Score</div>
+                <div class="stat-value" id="score">0</div>
+                <div class="stat-sub">Best: <span id="bestScore">0</span></div>
+                <div class="merge-hint">Click units to merge</div>
+            </div>
+            <div id="messageBox"></div>
+        </div>
+    </div>
+
+    <div id="gameOverScreen">
+        <div id="gameOverContent">
+            <h1>WAVE FAILED</h1>
+            <div class="final-score" id="finalScore">Score: 0</div>
+            <div class="stats-summary" id="statsSummary"></div>
+            <button id="restartBtn">RESTART GAME</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ==================== GAME CONFIG ====================
+        const CONFIG = {
+            INITIAL_RESOURCES: 100,
+            RESOURCE_PER_WAVE: 50,
+            UNIT_COSTS: { 1: 10, 2: 20, 3: 35, 4: 60, 5: 100 },
+            UNIT_DAMAGE: { 1: 5, 2: 12, 3: 25, 4: 50, 5: 100 },
+            ENEMY_HP: 20,
+            ENEMY_REWARD: 5,
+            ENEMIES_PER_WAVE_BASE: 3,
+            ENEMY_SPAWN_INTERVAL: 800,
+            GAME_SPEED: 1.0,
+        };
+
+        // ==================== STATE ====================
+        const gameState = {
+            resources: CONFIG.INITIAL_RESOURCES,
+            score: 0,
+            bestScore: parseInt(localStorage.getItem('bestScore') || '0'),
+            wave: 0,
+            health: 1,
+            units: [],
+            enemies: [],
+            particles: [],
+            selectedUnit: null,
+            gameOver: false,
+            waveActive: true,
+            enemiesSpawnedThisWave: 0,
+            enemiesKilledThisWave: 0,
+            lastSpawnTime: 0,
+        };
+
+        // ==================== SCENE SETUP ====================
+        const canvas = document.getElementById('canvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0e27);
+        scene.fog = new THREE.Fog(0x0a0e27, 200, 500);
+
+        const camera = new THREE.PerspectiveCamera(
+            60,
+            window.innerWidth / (window.innerHeight - 120),
+            0.1,
+            1000
+        );
+        camera.position.set(0, 25, 30);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight - 120);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+
+        // ==================== LIGHTING ====================
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(30, 40, 30);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.left = -60;
+        directionalLight.shadow.camera.right = 60;
+        directionalLight.shadow.camera.top = 60;
+        directionalLight.shadow.camera.bottom = -60;
+        scene.add(directionalLight);
+
+        // Neon accent light
+        const neonLight = new THREE.PointLight(0x00ff88, 0.5, 100);
+        neonLight.position.set(0, 20, 0);
+        scene.add(neonLight);
+
+        // ==================== GROUND ====================
+        const groundGeometry = new THREE.PlaneGeometry(80, 80);
+        const groundMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1a1f3a,
+            roughness: 0.8,
+            metalness: 0.1,
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.castShadow = false;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Grid
+        const gridSize = 80;
+        const gridDivisions = 16;
+        const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x00ff88, 0x004d4d);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // Base/Home structure
+        const baseGeometry = new THREE.ConeGeometry(8, 12, 32);
+        const baseMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ff88,
+            metalness: 0.6,
+            roughness: 0.3,
+            emissive: 0x00aa44,
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.set(0, 6, 0);
+        base.castShadow = true;
+        base.receiveShadow = true;
+        scene.add(base);
+
+        // ==================== INPUT & SELECTION ====================
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((e.clientY - rect.top) / (rect.height - 120)) * 2 + 1;
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (gameState.gameOver) return;
+            getMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(gameState.units.map(u => u.mesh));
+
+            if (intersects.length > 0) {
+                const clickedMesh = intersects[0].object;
+                const clickedUnit = gameState.units.find(u => u.mesh === clickedMesh);
+                if (clickedUnit) {
+                    handleMerge(clickedUnit);
+                }
+            }
+        });
+
+        // Touch controls for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            if (gameState.gameOver) return;
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((touch.clientY - rect.top) / (rect.height - 120)) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(gameState.units.map(u => u.mesh));
+
+            if (intersects.length > 0) {
+                const clickedMesh = intersects[0].object;
+                const clickedUnit = gameState.units.find(u => u.mesh === clickedMesh);
+                if (clickedUnit) {
+                    handleMerge(clickedUnit);
+                }
+            }
+        });
+
+        // ==================== UNIT SYSTEM ====================
+        function createUnitMesh(level) {
+            const size = 1 + level * 0.3;
+            const geometry = new THREE.OctahedronGeometry(size, 2);
+
+            const colors = [
+                0xff4488, // Level 1: Pink
+                0x4488ff, // Level 2: Blue
+                0x88ff00, // Level 3: Lime
+                0xffaa00, // Level 4: Orange
+                0xff00ff, // Level 5: Magenta
+            ];
+
+            const material = new THREE.MeshStandardMaterial({
+                color: colors[level - 1] || 0xffffff,
+                metalness: 0.8,
+                roughness: 0.2,
+                emissive: colors[level - 1] || 0xffffff,
+                emissiveIntensity: 0.5 + level * 0.1,
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            return mesh;
+        }
+
+        function spawnUnit(level, x, z) {
+            if (gameState.resources < CONFIG.UNIT_COSTS[level]) {
+                showMessage(`Need ${CONFIG.UNIT_COSTS[level]} energy!`);
+                return null;
+            }
+
+            gameState.resources -= CONFIG.UNIT_COSTS[level];
+
+            const unit = {
+                level,
+                x,
+                z,
+                hp: 100,
+                targetEnemy: null,
+                lastAttackTime: 0,
+                attackCooldown: 500,
+                mesh: createUnitMesh(level),
+                rotation: 0,
+            };
+
+            unit.mesh.position.set(x, 1 + level * 0.3, z);
+            unit.mesh.userData = { unit };
+
+            scene.add(unit.mesh);
+            gameState.units.push(unit);
+
+            return unit;
+        }
+
+        function handleMerge(unit) {
+            const adjacentUnit = gameState.units.find(u =>
+                u !== unit &&
+                u.level === unit.level &&
+                Math.hypot(u.x - unit.x, u.z - unit.z) < 5
+            );
+
+            if (!adjacentUnit) {
+                showMessage('Need adjacent unit of same level to merge!');
+                return;
+            }
+
+            if (unit.level >= 5) {
+                showMessage('Already max level!');
+                return;
+            }
+
+            const newLevel = unit.level + 1;
+            const midX = (unit.x + adjacentUnit.x) / 2;
+            const midZ = (unit.z + adjacentUnit.z) / 2;
+
+            // Remove old units
+            removeUnit(unit);
+            removeUnit(adjacentUnit);
+
+            // Create new merged unit
+            const mergedUnit = spawnUnit(newLevel, midX, midZ);
+            if (mergedUnit) {
+                gameState.score += newLevel * 100;
+                createParticleBurst(midX, 5, midZ, newLevel);
+                showMessage(`Merged! Level ${newLevel}`);
+            }
+        }
+
+        function removeUnit(unit) {
+            const idx = gameState.units.indexOf(unit);
+            if (idx !== -1) {
+                gameState.units.splice(idx, 1);
+                scene.remove(unit.mesh);
+            }
+        }
+
+        // ==================== ENEMY SYSTEM ====================
+        function spawnEnemy() {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 35;
+            const x = Math.cos(angle) * dist;
+            const z = Math.sin(angle) * dist;
+
+            const enemy = {
+                x,
+                z,
+                hp: CONFIG.ENEMY_HP,
+                mesh: createEnemyMesh(),
+                targetX: 0,
+                targetZ: 0,
+                speed: 8 + gameState.wave * 0.5,
+            };
+
+            enemy.mesh.position.set(x, 1, z);
+            scene.add(enemy.mesh);
+            gameState.enemies.push(enemy);
+            gameState.enemiesSpawnedThisWave++;
+
+            return enemy;
+        }
+
+        function createEnemyMesh() {
+            const geometry = new THREE.DodecahedronGeometry(0.8, 0);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xff3333,
+                metalness: 0.5,
+                roughness: 0.5,
+                emissive: 0xff1111,
+                emissiveIntensity: 0.6,
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        function removeEnemy(enemy) {
+            const idx = gameState.enemies.indexOf(enemy);
+            if (idx !== -1) {
+                gameState.enemies.splice(idx, 1);
+                scene.remove(enemy.mesh);
+                gameState.score += CONFIG.ENEMY_REWARD * (gameState.wave || 1);
+                gameState.enemiesKilledThisWave++;
+                createParticleBurst(enemy.x, 1, enemy.z, 1);
+            }
+        }
+
+        // ==================== PARTICLE SYSTEM ====================
+        function createParticleBurst(x, y, z, intensity = 1) {
+            for (let i = 0; i < 8 * intensity; i++) {
+                const particle = {
+                    x, y, z,
+                    vx: (Math.random() - 0.5) * 20,
+                    vy: Math.random() * 15 + 5,
+                    vz: (Math.random() - 0.5) * 20,
+                    life: 1,
+                    mesh: createParticleMesh(intensity),
+                };
+                scene.add(particle.mesh);
+                gameState.particles.push(particle);
+            }
+        }
+
+        function createParticleMesh(intensity) {
+            const geometry = new THREE.SphereGeometry(0.2 + intensity * 0.1, 8, 8);
+            const material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color().setHSL(Math.random(), 1, 0.6),
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            return mesh;
+        }
+
+        // ==================== GAME LOGIC ====================
+        function startWave() {
+            gameState.wave++;
+            gameState.resources = Math.min(
+                gameState.resources + CONFIG.RESOURCE_PER_WAVE,
+                300
+            );
+            gameState.waveActive = true;
+            gameState.enemiesSpawnedThisWave = 0;
+            gameState.enemiesKilledThisWave = 0;
+            gameState.lastSpawnTime = Date.now();
+        }
+
+        function updateUnits(dt) {
+            gameState.units.forEach(unit => {
+                // Rotate for visual effect
+                unit.rotation += dt * 2;
+                unit.mesh.rotation.x = unit.rotation;
+                unit.mesh.rotation.z = unit.rotation * 0.7;
+
+                // Find target enemy
+                if (!unit.targetEnemy || unit.targetEnemy.hp <= 0) {
+                    const closest = gameState.enemies.reduce((best, enemy) => {
+                        const dist = Math.hypot(enemy.x - unit.x, enemy.z - unit.z);
+                        if (!best || dist < best.dist) {
+                            return { enemy, dist };
+                        }
+                        return best;
+                    }, null);
+
+                    unit.targetEnemy = closest?.enemy || null;
+                }
+
+                // Attack
+                if (unit.targetEnemy && Date.now() - unit.lastAttackTime > unit.attackCooldown) {
+                    const dist = Math.hypot(
+                        unit.targetEnemy.x - unit.x,
+                        unit.targetEnemy.z - unit.z
+                    );
+
+                    if (dist < 15 + unit.level * 2) {
+                        unit.targetEnemy.hp -= CONFIG.UNIT_DAMAGE[unit.level];
+                        unit.lastAttackTime = Date.now();
+
+                        // Visual feedback
+                        createParticleBurst(unit.targetEnemy.x, 1, unit.targetEnemy.z, 0.5);
+
+                        if (unit.targetEnemy.hp <= 0) {
+                            removeEnemy(unit.targetEnemy);
+                            unit.targetEnemy = null;
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateEnemies(dt) {
+            gameState.enemies.forEach(enemy => {
+                // Move towards base
+                const dist = Math.hypot(enemy.x, enemy.z);
+                const speed = (enemy.speed * dt * CONFIG.GAME_SPEED) / 16;
+
+                if (dist > 2) {
+                    const ratio = speed / dist;
+                    enemy.x *= 1 - ratio;
+                    enemy.z *= 1 - ratio;
+                } else {
+                    gameState.health = 0;
+                    endGame();
+                }
+
+                enemy.mesh.position.set(enemy.x, 1, enemy.z);
+                enemy.mesh.rotation.x += dt;
+                enemy.mesh.rotation.y += dt * 0.7;
+            });
+
+            // Spawn enemies
+            const now = Date.now();
+            const enemiesPerWave = CONFIG.ENEMIES_PER_WAVE_BASE + gameState.wave;
+
+            if (gameState.waveActive &&
+                gameState.enemiesSpawnedThisWave < enemiesPerWave &&
+                now - gameState.lastSpawnTime > CONFIG.ENEMY_SPAWN_INTERVAL) {
+                spawnEnemy();
+                gameState.lastSpawnTime = now;
+            }
+
+            // Check if wave complete
+            if (gameState.waveActive &&
+                gameState.enemiesSpawnedThisWave >= enemiesPerWave &&
+                gameState.enemies.length === 0) {
+                gameState.waveActive = false;
+            }
+        }
+
+        function updateParticles(dt) {
+            gameState.particles = gameState.particles.filter(p => {
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.z += p.vz * dt;
+                p.vy -= 15 * dt; // gravity
+                p.life -= dt;
+
+                p.mesh.position.set(p.x, p.y, p.z);
+                p.mesh.material.opacity = p.life;
+
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        function endGame() {
+            gameState.gameOver = true;
+            gameState.waveActive = false;
+
+            if (gameState.score > gameState.bestScore) {
+                gameState.bestScore = gameState.score;
+                localStorage.setItem('bestScore', gameState.bestScore);
+            }
+
+            document.getElementById('gameOverScreen').classList.add('show');
+            document.getElementById('finalScore').textContent = `Score: ${gameState.score}`;
+            document.getElementById('statsSummary').innerHTML = `
+                <div>Waves: ${gameState.wave}</div>
+                <div>Units Created: ${gameState.units.length + gameState.enemiesKilledThisWave}</div>
+                <div>Best Score: ${gameState.bestScore}</div>
+            `;
+        }
+
+        function showMessage(text) {
+            const msgBox = document.getElementById('messageBox');
+            msgBox.textContent = text;
+            msgBox.classList.remove('hidden');
+            setTimeout(() => msgBox.classList.add('hidden'), 2000);
+        }
+
+        // ==================== UI UPDATES ====================
+        function updateUI() {
+            document.getElementById('waveNumber').textContent = gameState.wave;
+            document.getElementById('waveStatus').textContent =
+                `Enemies: ${gameState.enemiesKilledThisWave}/${CONFIG.ENEMIES_PER_WAVE_BASE + gameState.wave}`;
+            document.getElementById('resources').textContent = gameState.resources;
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('bestScore').textContent = gameState.bestScore;
+            document.getElementById('resourcesDetail').textContent =
+                `Used: ${(CONFIG.INITIAL_RESOURCES - gameState.resources) % CONFIG.INITIAL_RESOURCES}`;
+        }
+
+        // ==================== GAME LOOP ====================
+        let lastTime = Date.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const now = Date.now();
+            const dt = Math.min((now - lastTime) / 1000, 0.05);
+            lastTime = now;
+
+            if (!gameState.gameOver) {
+                if (!gameState.waveActive && gameState.wave > 0) {
+                    startWave();
+                }
+
+                if (gameState.wave === 0) {
+                    startWave();
+                }
+
+                updateUnits(dt);
+                updateEnemies(dt);
+                updateParticles(dt);
+                updateUI();
+            }
+
+            // Rotate camera slightly for dynamic view
+            const angle = Date.now() * 0.0001;
+            camera.position.x = Math.sin(angle) * 35;
+            camera.position.z = Math.cos(angle) * 35 + 10;
+            camera.lookAt(0, 10, 0);
+
+            renderer.render(scene, camera);
+        }
+
+        // ==================== MOBILE SPAWNING ====================
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (gameState.gameOver) return;
+
+            getMousePos(e);
+            const worldPos = getWorldPosition(mouse);
+
+            // Spawn level 1 unit (cheapest)
+            spawnUnit(1, worldPos.x, worldPos.z);
+        });
+
+        // Double-tap to spawn on mobile
+        let lastTapTime = 0;
+        canvas.addEventListener('touchend', (e) => {
+            const now = Date.now();
+            if (now - lastTapTime < 300) {
+                e.preventDefault();
+                if (gameState.gameOver) return;
+
+                const touch = e.changedTouches[0];
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((touch.clientY - rect.top) / (rect.height - 120)) * 2 + 1;
+                const worldPos = getWorldPosition(mouse);
+                spawnUnit(1, worldPos.x, worldPos.z);
+            }
+            lastTapTime = now;
+        });
+
+        function getWorldPosition(screenPos) {
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const target = new THREE.Vector3();
+            raycaster.setFromCamera(screenPos, camera);
+            raycaster.ray.intersectPlane(plane, target);
+            return { x: target.x, z: target.z };
+        }
+
+        // Right-click to spawn units
+        canvas.addEventListener('click', (e) => {
+            if (e.button === 2 || e.ctrlKey) {
+                if (gameState.gameOver) return;
+                getMousePos(e);
+                const worldPos = getWorldPosition(mouse);
+                spawnUnit(1, worldPos.x, worldPos.z);
+            }
+        });
+
+        // ==================== RESTART ====================
+        document.getElementById('restartBtn').addEventListener('click', () => {
+            location.reload();
+        });
+
+        // ==================== RESIZE ====================
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / (window.innerHeight - 120);
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight - 120);
+        });
+
+        // Start the game
+        animate();
+    </script>
+</body>
+</html>

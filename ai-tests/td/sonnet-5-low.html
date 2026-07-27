@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MERGE KEEP — Tower Defense Roguelike</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#05060a; font-family:'Segoe UI',system-ui,sans-serif; touch-action:none; }
+  #world { position:fixed; inset:0; overflow:hidden; }
+  #scene {
+    position:absolute; left:50%; top:46%;
+    transform-style:preserve-3d;
+    perspective: 1400px;
+  }
+  #boardWrap { position:absolute; transform-style:preserve-3d; }
+  .cell {
+    position:absolute; transform-style:preserve-3d;
+  }
+  .face {
+    position:absolute; backface-visibility:hidden;
+  }
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:10; }
+  .top-bar {
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 14px; pointer-events:none;
+    background:linear-gradient(to bottom, rgba(0,0,0,.65), transparent);
+  }
+  .stat {
+    display:flex; align-items:center; gap:6px;
+    color:#fff; font-weight:700; font-size:15px;
+    background:rgba(20,22,35,.6); border:1px solid rgba(255,255,255,.12);
+    padding:6px 12px; border-radius:10px; backdrop-filter: blur(6px);
+    pointer-events:auto;
+  }
+  .stat .ic { font-size:16px; }
+  #gold { color:#ffd75e; }
+  #lives { color:#ff6b6b; }
+  #wave { color:#7ee0ff; }
+  #streakBox { color:#ff9f43; }
+
+  #trayBar {
+    position:absolute; bottom:0; left:0; right:0;
+    display:flex; flex-direction:column; align-items:center;
+    gap:6px; padding:8px 8px 10px; pointer-events:none;
+    background:linear-gradient(to top, rgba(0,0,0,.7), transparent);
+  }
+  #tray {
+    display:flex; gap:8px; pointer-events:auto;
+    background:rgba(15,17,28,.55); border:1px solid rgba(255,255,255,.1);
+    padding:8px; border-radius:14px; backdrop-filter: blur(6px);
+  }
+  .trayCell {
+    width:52px; height:52px; border-radius:10px;
+    background:rgba(255,255,255,.06); border:2px dashed rgba(255,255,255,.18);
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px; position:relative; cursor:pointer;
+  }
+  .trayCell.filled { border-style:solid; }
+  .trayCell .tlevel {
+    position:absolute; bottom:1px; right:3px; font-size:10px; color:#fff; font-weight:800;
+    text-shadow:0 0 3px #000;
+  }
+  #actionBtns { display:flex; gap:8px; pointer-events:auto; }
+  .btn {
+    padding:10px 16px; border-radius:10px; border:none; font-weight:700; font-size:14px;
+    background:linear-gradient(180deg,#4f7cff,#2f52c9); color:#fff; cursor:pointer;
+    box-shadow:0 3px 0 #1f379c, 0 6px 12px rgba(0,0,0,.4);
+  }
+  .btn:active { transform:translateY(2px); box-shadow:0 1px 0 #1f379c; }
+  .btn.gold { background:linear-gradient(180deg,#ffd75e,#e0a800); box-shadow:0 3px 0 #a67900,0 6px 12px rgba(0,0,0,.4); color:#3a2600;}
+  .btn.red { background:linear-gradient(180deg,#ff7b7b,#d33); box-shadow:0 3px 0 #911,0 6px 12px rgba(0,0,0,.4);}
+  .btn:disabled { opacity:.4; filter:grayscale(.5); }
+
+  #buyRow { display:flex; gap:8px; pointer-events:auto; margin-bottom:2px; flex-wrap:wrap; justify-content:center; }
+  .buyCard {
+    width:64px; padding:6px 4px; border-radius:10px; text-align:center;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.15); color:#fff;
+    font-size:11px; cursor:pointer;
+  }
+  .buyCard .ic { font-size:20px; }
+  .buyCard .cost { color:#ffd75e; font-weight:700; }
+  .buyCard:active { transform:scale(.94); }
+
+  #overlay {
+    position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+    background:rgba(3,4,10,.88); backdrop-filter: blur(4px); pointer-events:auto;
+  }
+  #overlay.hidden { display:none; }
+  .panel {
+    width:min(92vw,420px); background:#12141f; border:1px solid rgba(255,255,255,.12);
+    border-radius:18px; padding:22px; color:#fff; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.6);
+  }
+  .panel h1 { font-size:26px; margin-bottom:6px; background:linear-gradient(90deg,#7ee0ff,#ffd75e); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { opacity:.75; font-size:13px; margin-bottom:14px; line-height:1.5; }
+  .rewardRow { display:flex; gap:10px; justify-content:center; margin:14px 0; }
+  .rewardCard {
+    flex:1; background:rgba(255,255,255,.06); border:2px solid rgba(255,255,255,.15);
+    border-radius:12px; padding:14px 8px; cursor:pointer; transition:.15s;
+  }
+  .rewardCard:hover, .rewardCard:active { border-color:#7ee0ff; transform:translateY(-3px); }
+  .rewardCard .ic { font-size:30px; }
+  .rewardCard .name { font-weight:700; font-size:13px; margin:6px 0 3px; }
+  .rewardCard .desc { font-size:11px; opacity:.7; }
+  .bigstat { display:flex; justify-content:space-around; margin:10px 0 16px; }
+  .bigstat div { font-size:22px; font-weight:800; }
+  .bigstat span { display:block; font-size:11px; opacity:.6; font-weight:400; }
+  #startPerks { display:flex; flex-direction:column; gap:8px; margin:14px 0; text-align:left; max-height:30vh; overflow-y:auto; }
+  .perkRow { background:rgba(255,255,255,.05); border-radius:8px; padding:8px 10px; font-size:12px; display:flex; justify-content:space-between; align-items:center; }
+  .perkRow b { color:#ffd75e; }
+
+  #toast {
+    position:fixed; top:70px; left:50%; transform:translateX(-50%);
+    z-index:40; padding:8px 18px; border-radius:20px; background:rgba(20,22,35,.9);
+    color:#fff; font-weight:700; font-size:14px; pointer-events:none; opacity:0; transition:opacity .3s, transform .3s;
+    border:1px solid rgba(255,255,255,.15);
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(4px); }
+
+  #comboBadge {
+    position:fixed; top:110px; left:50%; transform:translateX(-50%) scale(0);
+    z-index:40; font-size:15px; font-weight:900; color:#ff9f43; pointer-events:none;
+    text-shadow:0 0 8px rgba(255,159,67,.8); transition:transform .18s;
+  }
+  #comboBadge.show { transform:translateX(-50%) scale(1); }
+
+  .dragGhost { position:fixed; z-index:60; pointer-events:none; font-size:30px; transform:translate(-50%,-50%); filter:drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
+
+  #dailyBadge {
+    position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    color:#ffd75e; font-size:11px; font-weight:700; pointer-events:none;
+    background:rgba(0,0,0,.4); padding:3px 10px; border-radius:10px;
+  }
+  #fpsWarn{position:absolute;bottom:6px;left:6px;color:#555;font-size:10px;}
+</style>
+</head>
+<body>
+
+<div id="world">
+  <div id="scene">
+    <div id="boardWrap"></div>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="top-bar">
+    <div style="display:flex; gap:8px;">
+      <div class="stat"><span class="ic">💰</span><span id="gold">0</span></div>
+      <div class="stat"><span class="ic">❤️</span><span id="lives">0</span></div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <div class="stat" id="streakBox"><span class="ic">🔥</span><span id="streak">0</span></div>
+      <div class="stat"><span class="ic">🌊</span><span id="wave">1</span>/<span id="waveMax">10</span></div>
+    </div>
+  </div>
+  <div id="dailyBadge"></div>
+
+  <div id="trayBar">
+    <div id="buyRow"></div>
+    <div id="tray"></div>
+    <div id="actionBtns">
+      <button class="btn gold" id="rerollBtn">🎲 Reroll (⭐<span id="rerollCost">2</span>)</button>
+      <button class="btn" id="startWaveBtn">▶ Send Wave</button>
+      <button class="btn red" id="speedBtn">1x</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="comboBadge"></div>
+
+<div id="overlay">
+  <div class="panel" id="panelContent"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   MERGE KEEP — a single-file pseudo-3D Tower-Defense / Merge / Roguelike
+   Rendered with CSS3D transforms (no external libs, no CDN, mobile-friendly)
+   ============================================================ */
+
+/* ---------- Persistent meta progression (the "hook") ---------- */
+const SAVE_KEY = "mergekeep_save_v1";
+function loadMeta(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { shards:0, bestWave:0, runsPlayed:0, unlocked:{}, lastPlayedDay:null, dailyStreak:0 };
+}
+function saveMeta(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); }catch(e){} }
+let meta = loadMeta();
+
+// Daily login streak hook
+(function dailyCheck(){
+  const today = new Date().toDateString();
+  if(meta.lastPlayedDay !== today){
+    const y = new Date(Date.now()-86400000).toDateString();
+    meta.dailyStreak = (meta.lastPlayedDay === y) ? (meta.dailyStreak+1) : 1;
+    meta.lastPlayedDay = today;
+    const bonus = Math.min(meta.dailyStreak,7) * 2;
+    meta.shards += bonus;
+    saveMeta();
+    setTimeout(()=>showToast(`🔥 Day ${meta.dailyStreak} streak! +${bonus} shards`), 800);
+  }
+})();
+
+/* ---------- Tower / Unit definitions ---------- */
+const TIERS = ["🗡️","⚔️","🏹","🔮","💎","👑"]; // merge tiers icon set fallback
+const TOWER_TYPES = {
+  blade:  { name:"Blade Turret", ic:"🗡️", color:"#7ee0ff", baseDmg:8,  baseRange:110, baseRate:750, cost:10 },
+  arrow:  { name:"Arrow Tower",  ic:"🏹", color:"#8fff8f", baseDmg:5,  baseRange:160, baseRate:500, cost:10 },
+  frost:  { name:"Frost Spire",  ic:"❄️", color:"#9ad8ff", baseDmg:3,  baseRange:120, baseRate:900, cost:12, slow:true },
+  fire:   { name:"Fire Cannon",  ic:"🔥", color:"#ffb26b", baseDmg:14, baseRange:95,  baseRate:1100, cost:14, splash:true },
+  arcane: { name:"Arcane Orb",   ic:"🔮", color:"#c99bff", baseDmg:10, baseRange:140, baseRate:650, cost:16 },
+};
+const TOWER_KEYS = Object.keys(TOWER_TYPES);
+
+/* ---------- Roguelike perks (offered between waves) ---------- */
+const PERKS = [
+  { id:"dmg", name:"Sharpened Edges", ic:"⚡", desc:"+15% tower damage", apply:s=>s.dmgMult*=1.15 },
+  { id:"gold", name:"Gold Rush", ic:"💰", desc:"+20% gold from kills", apply:s=>s.goldMult*=1.2 },
+  { id:"range", name:"Eagle Eye", ic:"👁️", desc:"+12% tower range", apply:s=>s.rangeMult*=1.12 },
+  { id:"rate", name:"Haste", ic:"⏱️", desc:"+15% attack speed", apply:s=>s.rateMult*=1.15 },
+  { id:"life", name:"Fortify", ic:"🛡️", desc:"+3 max lives now", apply:s=>{s.lives+=3;s.maxLives+=3;} },
+  { id:"slot", name:"Extra Slot", ic:"➕", desc:"+1 tray slot", apply:s=>{s.traySlots=Math.min(s.traySlots+1,8);} },
+  { id:"crit", name:"Killer Instinct", ic:"🎯", desc:"+8% crit chance (x2 dmg)", apply:s=>s.critChance+=0.08 },
+  { id:"mergegold", name:"Merge Bounty", ic:"✨", desc:"Merging refunds 2 gold", apply:s=>s.mergeBounty+=2 },
+];
+
+/* ---------- Game state ---------- */
+let state;
+function freshState(){
+  return {
+    gold: 60, lives: 20, maxLives:20, wave: 1, waveMax: 10,
+    dmgMult:1, goldMult:1, rangeMult:1, rateMult:1, critChance:0.03, mergeBounty:0,
+    traySlots: 5, speed:1, streak:0, running:false, gameOver:false,
+    towers: [], enemies: [], projectiles: [], particles:[],
+    rerollCost:2, rerollBase:2,
+  };
+}
+
+/* ---------- Grid / lane path (isometric-ish board rendered via CSS3D) ---------- */
+const COLS = 7, ROWS = 5;
+const CELL = 66;
+const PATH_ROW = 2; // enemies walk straight across row 2
+
+const boardWrap = document.getElementById("boardWrap");
+const sceneEl = document.getElementById("scene");
+let cellEls = []; // [row][col] -> element (for placement highlight / towers)
+
+function buildBoard(){
+  boardWrap.innerHTML = "";
+  cellEls = [];
+  const w = COLS*CELL, h = ROWS*CELL;
+  boardWrap.style.width = w+"px";
+  boardWrap.style.height = h+"px";
+  boardWrap.style.marginLeft = (-w/2)+"px";
+  boardWrap.style.marginTop = (-h/2)+"px";
+
+  for(let r=0;r<ROWS;r++){
+    cellEls[r]=[];
+    for(let c=0;c<COLS;c++){
+      const isPath = r===PATH_ROW;
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.style.width = CELL+"px";
+      cell.style.height = CELL+"px";
+      cell.style.left = (c*CELL)+"px";
+      cell.style.top = (r*CELL)+"px";
+      cell.dataset.r = r; cell.dataset.c = c;
+
+      // floor face (rotated flat, like top of a tile), pseudo-3D via rotateX
+      const floor = document.createElement("div");
+      floor.className = "face floor";
+      floor.style.cssText = `width:${CELL-4}px;height:${CELL-4}px;left:2px;top:2px;
+        background:${isPath ? 'linear-gradient(135deg,#4a3a2a,#6b5238)' : 'linear-gradient(135deg,#1c2b3a,#233a4d)'};
+        border:1px solid rgba(255,255,255,.08); border-radius:6px;
+        transform: rotateX(55deg) translateZ(0px);
+        box-shadow: inset 0 0 12px rgba(0,0,0,.4);`;
+      cell.appendChild(floor);
+
+      if(!isPath){
+        cell.style.cursor = "pointer";
+        cell.addEventListener("click", ()=>onCellClick(r,c));
+      }
+      boardWrap.appendChild(cell);
+      cellEls[r][c] = cell;
+    }
+  }
+}
+
+/* Tilt the whole scene for a 3D isometric feel, plus subtle parallax on move */
+function applySceneTransform(){
+  sceneEl.style.transform = `rotateX(58deg) rotateZ(0deg) scale(${zoom})`;
+}
+let zoom = 1;
+applySceneTransform();
+
+// responsive scale
+function fitScene(){
+  const w = window.innerWidth, h = window.innerHeight;
+  const targetW = COLS*CELL*1.6, targetH = ROWS*CELL*2.6;
+  const s = Math.min(w/targetW, h/targetH, 1.15);
+  zoom = Math.max(s, 0.55);
+  applySceneTransform();
+}
+window.addEventListener("resize", fitScene);
+
+/* ---------- Rendering entities as 3D-ish CSS boxes ---------- */
+function makeUnitEl(icon, color, size){
+  const el = document.createElement("div");
+  el.className = "face unit3d";
+  el.style.cssText = `
+    width:${size}px; height:${size}px; left:${(CELL-size)/2}px; top:${(CELL-size)/2}px;
+    display:flex; align-items:center; justify-content:center; font-size:${size*0.62}px;
+    background: radial-gradient(circle at 35% 30%, ${color}, #10131c 85%);
+    border-radius:50%; border:2px solid rgba(255,255,255,.35);
+    transform: rotateX(-55deg) translateZ(${size*0.55}px);
+    box-shadow: 0 6px 14px rgba(0,0,0,.5), 0 0 18px ${color}66;
+  `;
+  el.textContent = icon;
+  return el;
+}
+
+/* ---------- Towers ---------- */
+function towerDPS(t){ return t.dmg * (1000/t.rate); }
+function spawnTowerAt(r,c, key, level){
+  const def = TOWER_TYPES[key];
+  const t = {
+    id: Math.random().toString(36).slice(2), key, level,
+    r, c, dmg: def.baseDmg*Math.pow(1.9,level-1), range: def.baseRange*(1+ (level-1)*0.08),
+    rate: def.baseRate*Math.pow(0.94,level-1), cooldown:0,
+    slow: def.slow, splash: def.splash, color: def.color,
+  };
+  state.towers.push(t);
+  renderTowers();
+  return t;
+}
+function towerCellKey(r,c){ return r+"_"+c; }
+function towerAt(r,c){ return state.towers.find(t=>t.r===r&&t.c===c); }
+
+function renderTowers(){
+  // clear towers layer inside cells (keep floor)
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    const cell = cellEls[r][c];
+    const old = cell.querySelector(".towerUnit");
+    if(old) old.remove();
+  }
+  state.towers.forEach(t=>{
+    const def = TOWER_TYPES[t.key];
+    const el = makeUnitEl(def.ic, def.color, 40+t.level*3);
+    el.classList.add("towerUnit");
+    const badge = document.createElement("div");
+    badge.textContent = "Lv"+t.level;
+    badge.style.cssText = "position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);font-size:9px;color:#fff;background:rgba(0,0,0,.6);padding:1px 5px;border-radius:6px;white-space:nowrap;";
+    el.appendChild(badge);
+    cellEls[t.r][t.c].appendChild(el);
+  });
+}
+
+/* ---------- Merge logic ---------- */
+function tryMergeAt(r,c, key, level){
+  const existing = towerAt(r,c);
+  if(!existing) return false;
+  if(existing.key===key && existing.level===level){
+    // merge -> remove old, spawn level+1
+    state.towers = state.towers.filter(t=>t!==existing);
+    spawnTowerAt(r,c,key,level+1);
+    if(state.mergeBounty) state.gold += state.mergeBounty;
+    combo(1);
+    showToast(`✨ Merged into Lv${level+1} ${TOWER_TYPES[key].name}!`);
+    return true;
+  }
+  return false;
+}
+
+/* ---------- Tray (inventory of un-placed towers, drag to board) ---------- */
+let tray = []; // {key, level}
+function renderTray(){
+  const trayEl = document.getElementById("tray");
+  trayEl.innerHTML = "";
+  for(let i=0;i<state.traySlots;i++){
+    const slot = document.createElement("div");
+    slot.className = "trayCell" + (tray[i] ? " filled":"");
+    if(tray[i]){
+      const def = TOWER_TYPES[tray[i].key];
+      slot.textContent = def.ic;
+      slot.style.background = `radial-gradient(circle at 35% 30%, ${def.color}55, #10131c)`;
+      const lvl = document.createElement("div");
+      lvl.className="tlevel"; lvl.textContent="Lv"+tray[i].level;
+      slot.appendChild(lvl);
+      slot.draggable = false;
+      bindDrag(slot, i);
+    }
+    slot.dataset.idx = i;
+    trayEl.appendChild(slot);
+  }
+}
+
+function bindDrag(slot, idx){
+  let dragging=false, ghost=null;
+  const start=(x,y)=>{
+    dragging=true;
+    ghost = document.createElement("div");
+    ghost.className="dragGhost";
+    ghost.textContent = TOWER_TYPES[tray[idx].key].ic;
+    document.body.appendChild(ghost);
+    move(x,y);
+  };
+  const move=(x,y)=>{ if(ghost){ ghost.style.left=x+"px"; ghost.style.top=y+"px"; } };
+  const end=(x,y)=>{
+    if(!dragging) return;
+    dragging=false;
+    if(ghost){ ghost.remove(); ghost=null; }
+    const cellInfo = pointToCell(x,y);
+    if(cellInfo){
+      placeFromTray(idx, cellInfo.r, cellInfo.c);
+    }
+  };
+  slot.addEventListener("pointerdown", e=>{ e.preventDefault(); start(e.clientX,e.clientY); slot.setPointerCapture(e.pointerId); });
+  slot.addEventListener("pointermove", e=>{ if(dragging) move(e.clientX,e.clientY); });
+  slot.addEventListener("pointerup", e=>{ end(e.clientX,e.clientY); });
+  slot.addEventListener("pointercancel", e=>{ dragging=false; if(ghost){ghost.remove();ghost=null;} });
+}
+
+function pointToCell(x,y){
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+    if(r===PATH_ROW) continue;
+    const rect = cellEls[r][c].getBoundingClientRect();
+    if(x>=rect.left && x<=rect.right && y>=rect.top && y<=rect.bottom) return {r,c};
+  }
+  return null;
+}
+
+function placeFromTray(idx, r, c){
+  const item = tray[idx];
+  if(!item) return;
+  if(towerAt(r,c)){
+    if(tryMergeAt(r,c,item.key,item.level)){
+      tray[idx]=null; renderTray(); renderTowers();
+    } else {
+      showToast("⛔ Slot occupied — match type & level to merge");
+    }
+    return;
+  }
+  spawnTowerAt(r,c,item.key,item.level);
+  tray[idx]=null;
+  renderTray();
+}
+
+// tap-to-place fallback for simple clicks (also works with drag)
+let selectedTrayIdx = null;
+function onCellClick(r,c){
+  if(selectedTrayIdx!==null && tray[selectedTrayIdx]){
+    placeFromTray(selectedTrayIdx, r,c);
+    selectedTrayIdx = null;
+    document.querySelectorAll(".trayCell").forEach(s=>s.style.outline="none");
+    return;
+  }
+  // try merging two placed towers by tapping one then an adjacent same? Keep simple: no-op
+}
+document.getElementById("tray").addEventListener("click", (e)=>{
+  const slot = e.target.closest(".trayCell");
+  if(!slot) return;
+  const idx = +slot.dataset.idx;
+  if(!tray[idx]) return;
+  selectedTrayIdx = (selectedTrayIdx===idx) ? null : idx;
+  document.querySelectorAll(".trayCell").forEach(s=>s.style.outline="none");
+  if(selectedTrayIdx!==null) slot.style.outline = "2px solid #7ee0ff";
+});
+
+/* ---------- Shop (buy new lvl-1 towers into tray) ---------- */
+function renderBuyRow(){
+  const row = document.getElementById("buyRow");
+  row.innerHTML = "";
+  TOWER_KEYS.forEach(key=>{
+    const def = TOWER_TYPES[key];
+    const card = document.createElement("div");
+    card.className = "buyCard";
+    card.innerHTML = `<div class="ic">${def.ic}</div><div>${def.name.split(" ")[0]}</div><div class="cost">💰${def.cost}</div>`;
+    card.addEventListener("click", ()=>buyTower(key));
+    row.appendChild(card);
+  });
+}
+function buyTower(key){
+  const def = TOWER_TYPES[key];
+  if(state.gold < def.cost) { showToast("Not enough gold"); return; }
+  const freeIdx = tray.findIndex((t,i)=>!t && i<state.traySlots);
+  if(freeIdx===-1){ showToast("Tray full!"); return; }
+  state.gold -= def.cost;
+  tray[freeIdx] = {key, level:1};
+  renderTray();
+  updateHUD();
+}
+
+/* ---------- Enemies ---------- */
+const ENEMY_TYPES = {
+  grunt:{ic:"👾",hp:20,speed:34,color:"#ff6b6b",gold:3},
+  runner:{ic:"🦇",hp:12,speed:60,color:"#ffb2ff",gold:3},
+  tank:{ic:"🛡️",hp:70,speed:20,color:"#ffa94d",gold:6},
+  boss:{ic:"👹",hp:260,speed:16,color:"#c93a3a",gold:25},
+};
+const PATH_START_X = -20; // px before col 0
+const PATH_END_X = COLS*CELL+20;
+
+function spawnWave(){
+  const w = state.wave;
+  const count = 5 + Math.floor(w*1.6);
+  let delay = 0;
+  const isBossWave = (w % 5 === 0);
+  for(let i=0;i<count;i++){
+    delay += 550 - Math.min(w*8,300);
+    setTimeout(()=>{
+      if(state.gameOver) return;
+      let type = "grunt";
+      const roll = Math.random();
+      if(isBossWave && i===count-1) type="boss";
+      else if(roll<0.2 && w>2) type="runner";
+      else if(roll<0.35 && w>3) type="tank";
+      spawnEnemy(type, w);
+    }, delay/state.speed);
+  }
+  state.waveSpawnTimer = delay;
+}
+function spawnEnemy(type, wave){
+  const def = ENEMY_TYPES[type];
+  const hpMult = 1 + (wave-1)*0.22;
+  const e = {
+    id: Math.random().toString(36).slice(2), type,
+    hp: def.hp*hpMult, maxHp: def.hp*hpMult, speed:def.speed, x: PATH_START_X, r: PATH_ROW,
+    slowT:0, el:null, gold:def.gold,
+  };
+  const el = makeUnitEl(def.ic, def.color, 34);
+  el.classList.add("enemyUnit");
+  const hpWrap = document.createElement("div");
+  hpWrap.style.cssText="position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:30px;height:4px;background:#2a2a2a;border-radius:2px;overflow:hidden;";
+  const hpBar = document.createElement("div");
+  hpBar.style.cssText="height:100%;background:#7cff7c;width:100%;";
+  hpWrap.appendChild(hpBar);
+  el.appendChild(hpWrap);
+  e.hpBar = hpBar;
+  e.el = el;
+  cellEls[PATH_ROW][0].parentElement.appendChild(el); // attach to boardWrap directly for free x movement
+  el.style.position = "absolute";
+  el.style.top = (PATH_ROW*CELL + (CELL-34)/2)+"px";
+  state.enemies.push(e);
+}
+
+/* ---------- Combat loop ---------- */
+let lastT = performance.now();
+function gameLoop(now){
+  const rawDt = Math.min(now-lastT, 60);
+  lastT = now;
+  if(state.running && !state.gameOver){
+    const dt = rawDt*state.speed;
+    updateEnemies(dt);
+    updateTowers(dt);
+    updateProjectiles(dt);
+  }
+  requestAnimationFrame(gameLoop);
+}
+function updateEnemies(dt){
+  for(let i=state.enemies.length-1;i>=0;i--){
+    const e = state.enemies[i];
+    let spd = e.speed;
+    if(e.slowT>0){ spd*=0.5; e.slowT-=dt; }
+    e.x += spd*dt/1000;
+    e.el.style.left = e.x+"px";
+    if(e.x > PATH_END_X){
+      // reached base
+      state.lives -= (e.type==="boss"?5:1);
+      removeEnemy(i);
+      combo(0); // break streak
+      updateHUD();
+      if(state.lives<=0) endRun(false);
+    }
+  }
+}
+function removeEnemy(i){
+  const e = state.enemies[i];
+  e.el.remove();
+  state.enemies.splice(i,1);
+}
+function updateTowers(dt){
+  state.towers.forEach(t=>{
+    t.cooldown -= dt;
+    if(t.cooldown>0) return;
+    const range = t.range*state.rangeMult;
+    let target=null, best=-1;
+    const tx = t.c*CELL+CELL/2, ty = t.r*CELL+CELL/2;
+    state.enemies.forEach(e=>{
+      const ex = e.x+17, ey = e.r*CELL+CELL/2;
+      const d = Math.hypot(ex-tx, ey-ty);
+      if(d<=range && e.x>best){ best=e.x; target=e; }
+    });
+    if(target){
+      fireAt(t,target);
+      t.cooldown = t.rate/state.rateMult;
+    }
+  });
+}
+function fireAt(t,target){
+  let dmg = t.dmg*state.dmgMult;
+  let crit=false;
+  if(Math.random()<state.critChance){ dmg*=2; crit=true; }
+  target.hp -= dmg;
+  target.hpBar.style.width = Math.max(0,(target.hp/target.maxHp)*100)+"%";
+  target.hpBar.style.background = target.hp/target.maxHp>0.5 ? "#7cff7c" : target.hp/target.maxHp>0.2 ? "#ffd75e":"#ff6b6b";
+  if(t.slow) target.slowT = 1200;
+  spawnZap(t,target,crit);
+  if(target.hp<=0){
+    killEnemy(target);
+  }
+}
+function spawnZap(t,target,crit){
+  const el = document.createElement("div");
+  const tx = t.c*CELL+CELL/2, ty = t.r*CELL+CELL/2;
+  const ex = target.x+17, ey = target.r*CELL+CELL/2;
+  el.style.cssText = `position:absolute; left:${tx}px; top:${ty}px; width:${Math.hypot(ex-tx,ey-ty)}px; height:2px;
+    background:${crit?'#ffd75e':t.color}; transform-origin:0 0;
+    transform: rotate(${Math.atan2(ey-ty,ex-tx)}rad) rotateX(-55deg); opacity:.85; box-shadow:0 0 6px ${t.color};`;
+  boardWrap.appendChild(el);
+  setTimeout(()=>el.remove(),90/state.speed);
+}
+function killEnemy(target){
+  const gained = Math.round(target.gold*state.goldMult);
+  state.gold += gained;
+  state.streak++;
+  combo(state.streak);
+  floatText(target.x, target.r*CELL, "+"+gained, "#ffd75e");
+  const idx = state.enemies.indexOf(target);
+  if(idx>=0) removeEnemy(idx);
+  updateHUD();
+  checkWaveClear();
+}
+function floatText(x,y,text,color){
+  const el = document.createElement("div");
+  el.textContent = text;
+  el.style.cssText = `position:absolute; left:${x}px; top:${y}px; color:${color}; font-weight:800; font-size:13px;
+    pointer-events:none; transform: rotateX(-55deg) translateZ(20px); transition: transform .6s ease-out, opacity .6s;`;
+  boardWrap.appendChild(el);
+  requestAnimationFrame(()=>{
+    el.style.transform = `rotateX(-55deg) translateZ(60px) translateY(-20px)`;
+    el.style.opacity = "0";
+  });
+  setTimeout(()=>el.remove(),620);
+}
+function updateProjectiles(dt){ /* zaps are self-cleaning DOM elements */ }
+
+/* combo / streak UI (game-theory hook: visible momentum, loss-averse break) */
+let comboTimer=null;
+function combo(n){
+  state.streak = n;
+  document.getElementById("streak").textContent = n;
+  const badge = document.getElementById("comboBadge");
+  if(n>=5){
+    badge.textContent = `🔥 ${n} STREAK`;
+    badge.classList.add("show");
+    clearTimeout(comboTimer);
+    comboTimer = setTimeout(()=>badge.classList.remove("show"),900);
+  } else if(n===0){
+    badge.classList.remove("show");
+  }
+}
+
+function checkWaveClear(){
+  if(state.enemies.length===0 && state.waveSpawned && !state.waveClearing){
+    state.waveClearing = true;
+    setTimeout(()=>{
+      if(state.enemies.length===0){
+        onWaveComplete();
+      } else { state.waveClearing=false; }
+    }, 400);
+  }
+}
+
+/* ---------- Wave flow ---------- */
+function startWave(){
+  if(state.running) return;
+  state.running = true;
+  state.waveSpawned = true;
+  document.getElementById("startWaveBtn").disabled = true;
+  spawnWave();
+}
+function onWaveComplete(){
+  state.running = false;
+  state.waveSpawned = false;
+  state.waveClearing = false;
+  document.getElementById("startWaveBtn").disabled = false;
+  const waveGold = 15 + state.wave*3;
+  state.gold += waveGold;
+  showToast(`Wave ${state.wave} cleared! +${waveGold} gold`);
+  if(state.wave >= state.waveMax){
+    endRun(true);
+    return;
+  }
+  state.wave++;
+  updateHUD();
+  offerPerks();
+}
+
+/* ---------- Perk / reward screen between waves (variable reward hook) ---------- */
+function offerPerks(){
+  const overlay = document.getElementById("overlay");
+  const panel = document.getElementById("panelContent");
+  const picks = shuffle(PERKS.slice()).slice(0,3);
+  panel.innerHTML = `<h1>Wave ${state.wave-1} Cleared!</h1><p>Choose a boon to power up your run</p>
+    <div class="rewardRow" id="rewardRow"></div>`;
+  const row = panel.querySelector("#rewardRow");
+  picks.forEach(p=>{
+    const card = document.createElement("div");
+    card.className = "rewardCard";
+    card.innerHTML = `<div class="ic">${p.ic}</div><div class="name">${p.name}</div><div class="desc">${p.desc}</div>`;
+    card.addEventListener("click", ()=>{
+      p.apply(state);
+      overlay.classList.add("hidden");
+      renderTray();
+      updateHUD();
+      showToast(`${p.ic} ${p.name} acquired`);
+    });
+    row.appendChild(card);
+  });
+  overlay.classList.remove("hidden");
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+/* ---------- Reroll shop ---------- */
+document.getElementById("rerollBtn").addEventListener("click", ()=>{
+  if(meta.shards < state.rerollCost){ showToast("Not enough ⭐ shards"); return; }
+  meta.shards -= state.rerollCost;
+  state.rerollCost = Math.ceil(state.rerollCost*1.5);
+  document.getElementById("rerollCost").textContent = state.rerollCost;
+  saveMeta();
+  // free random tier-1 tower straight to tray
+  const key = TOWER_KEYS[Math.floor(Math.random()*TOWER_KEYS.length)];
+  const freeIdx = tray.findIndex((t,i)=>!t && i<state.traySlots);
+  if(freeIdx>-1){ tray[freeIdx]={key,level:1}; renderTray(); showToast(`🎲 Got a free ${TOWER_TYPES[key].name}!`);}
+  else showToast("Tray full — sell/place a tower first");
+});
+
+document.getElementById("startWaveBtn").addEventListener("click", startWave);
+document.getElementById("speedBtn").addEventListener("click", ()=>{
+  state.speed = state.speed===1?2:state.speed===2?3:1;
+  document.getElementById("speedBtn").textContent = state.speed+"x";
+});
+
+/* ---------- HUD ---------- */
+function updateHUD(){
+  document.getElementById("gold").textContent = state.gold;
+  document.getElementById("lives").textContent = state.lives;
+  document.getElementById("wave").textContent = state.wave;
+  document.getElementById("waveMax").textContent = state.waveMax;
+  document.getElementById("streak").textContent = state.streak;
+  document.getElementById("rerollCost").textContent = state.rerollCost;
+  document.getElementById("dailyBadge").textContent = `⭐ ${meta.shards} shards  |  🔥 ${meta.dailyStreak} day streak  |  🏆 Best wave ${meta.bestWave}`;
+}
+
+let toastTimer=null;
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("show"),1600);
+}
+
+/* ---------- Start / End run ---------- */
+function endRun(won){
+  state.gameOver = true;
+  state.running = false;
+  meta.runsPlayed++;
+  meta.bestWave = Math.max(meta.bestWave, won?state.wave:state.wave-1);
+  const shardsEarned = Math.round((won? state.wave*4+20 : state.wave*2) + state.streak*0.5);
+  meta.shards += shardsEarned;
+  saveMeta();
+
+  const overlay = document.getElementById("overlay");
+  const panel = document.getElementById("panelContent");
+  panel.innerHTML = `
+    <h1>${won ? "🏆 Keep Defended!" : "💀 The Keep Has Fallen"}</h1>
+    <p>${won ? "You survived all waves this run." : `Overwhelmed on wave ${state.wave}.`}</p>
+    <div class="bigstat">
+      <div>${state.wave-(won?0:1)}<span>Waves cleared</span></div>
+      <div>${state.streak}<span>Best streak</span></div>
+      <div>+${shardsEarned}<span>⭐ earned</span></div>
+    </div>
+    <p style="opacity:.6">Total shards: ${meta.shards} · Best wave ever: ${meta.bestWave}</p>
+    <button class="btn gold" id="playAgainBtn" style="width:100%;margin-top:8px;padding:14px;font-size:16px;">↻ Play Again</button>
+  `;
+  overlay.classList.remove("hidden");
+  panel.querySelector("#playAgainBtn").addEventListener("click", ()=>{ overlay.classList.add("hidden"); initRun(); });
+}
+
+/* ---------- Init ---------- */
+function clearBoardEntities(){
+  document.querySelectorAll(".enemyUnit").forEach(e=>e.remove());
+  document.querySelectorAll(".towerUnit").forEach(e=>e.remove());
+}
+function initRun(){
+  state = freshState();
+  tray = new Array(8).fill(null);
+  clearBoardEntities();
+  buildBoard();
+  fitScene();
+  renderTray();
+  renderBuyRow();
+  updateHUD();
+  document.getElementById("startWaveBtn").disabled = false;
+  document.getElementById("speedBtn").textContent = "1x";
+  // starter towers
+  tray[0] = {key:"blade", level:1};
+  tray[1] = {key:"arrow", level:1};
+  renderTray();
+  showWelcome();
+}
+
+function showWelcome(){
+  const overlay = document.getElementById("overlay");
+  const panel = document.getElementById("panelContent");
+  panel.innerHTML = `
+    <h1>⚔️ MERGE KEEP</h1>
+    <p>Buy towers, drag them onto the board, and <b>merge two identical towers</b> to fuse them into a stronger one. Survive 10 waves. Choose a boon after each wave. Build your streak — don't let it break!</p>
+    <div id="startPerks">
+      <div class="perkRow"><span>🗡️ Place towers</span><b>Tap buy card, drag to grid</b></div>
+      <div class="perkRow"><span>✨ Merge towers</span><b>Drag same type+level onto each other</b></div>
+      <div class="perkRow"><span>🔥 Streak</span><b>Kills in a row boost your run</b></div>
+      <div class="perkRow"><span>⭐ Shards</span><b>Persist forever — spend on rerolls</b></div>
+    </div>
+    <button class="btn gold" id="beginBtn" style="width:100%;padding:14px;font-size:16px;">▶ Start Run</button>
+  `;
+  overlay.classList.remove("hidden");
+  panel.querySelector("#beginBtn").addEventListener("click", ()=>overlay.classList.add("hidden"));
+}
+
+buildBoard();
+fitScene();
+requestAnimationFrame(gameLoop);
+initRun();
+
+})();
+</script>
+</body>
+</html>

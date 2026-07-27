@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Merge Keep — Tower Defense Roguelike</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#131826; --panel2:#1a2033; --text:#eaf0ff; --muted:#8b96b3;
+    --gold:#ffd166; --hp:#ff5d73; --accent:#5ee8ff; --good:#7bffa0;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    overscroll-behavior:none; height:100%; width:100%;}
+  body{display:flex; flex-direction:column; align-items:center; min-height:100vh; touch-action:none; user-select:none;}
+  #app{width:100%; max-width:980px; display:flex; flex-direction:column; height:100vh; height:100dvh;}
+  #hud{display:flex; align-items:center; gap:10px; padding:8px 10px; background:linear-gradient(180deg,#151c2c,#101526);
+    border-bottom:1px solid #232b40; flex-wrap:wrap; font-size:13px; font-weight:600;}
+  #hud .stat{display:flex; align-items:center; gap:4px; background:var(--panel2); padding:5px 9px; border-radius:8px; white-space:nowrap;}
+  #hud .stat.gold{color:var(--gold);} #hud .stat.hp{color:var(--hp);} #hud .stat.acc{color:var(--accent);} #hud .stat.good{color:var(--good);}
+  #hud .spacer{flex:1;}
+  #muteBtn,#menuBtn{background:var(--panel2); border:1px solid #2a3350; color:var(--text); border-radius:8px; padding:5px 9px; font-size:13px; cursor:pointer;}
+  #canvasWrap{position:relative; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:radial-gradient(ellipse at 50% 0%, #16213a 0%, #0a0d16 70%);}
+  #game{width:100%; height:auto; max-width:960px; max-height:100%; aspect-ratio:960/640; touch-action:none; display:block; object-fit:contain;}
+  #banner{position:absolute; top:14px; left:50%; transform:translateX(-50%); background:rgba(10,14,24,0.85); border:1px solid #2a3350;
+    padding:8px 18px; border-radius:10px; font-weight:700; font-size:15px; color:var(--accent); pointer-events:none; opacity:0; transition:opacity .3s;}
+  #banner.show{opacity:1;}
+  #toolbar{display:flex; align-items:center; gap:8px; padding:10px; background:linear-gradient(0deg,#151c2c,#101526); border-top:1px solid #232b40; flex-wrap:wrap;}
+  .buyBtn{flex:1; min-width:86px; border-radius:12px; border:2px solid transparent; padding:8px 6px; text-align:center; cursor:pointer;
+    color:#0a0d16; font-weight:800; font-size:13px; transition:transform .1s;}
+  .buyBtn:active{transform:scale(0.94);}
+  .buyBtn.fire{background:linear-gradient(160deg,#ffb066,#ff5722);}
+  .buyBtn.ice{background:linear-gradient(160deg,#a6f2ff,#1f9fe0);}
+  .buyBtn.lightning{background:linear-gradient(160deg,#ffe89a,#8a4fff); color:#1a1030;}
+  .buyBtn.selected{border-color:#fff; box-shadow:0 0 14px rgba(255,255,255,0.6);}
+  .buyBtn small{display:block; font-weight:600; font-size:11px; opacity:.85;}
+  .buyBtn.disabled{opacity:.4; cursor:default;}
+  #startWaveBtn{flex:1.3; min-width:120px; background:linear-gradient(160deg,#7bffa0,#1fae5b); color:#04220f; font-weight:800;
+    border:none; border-radius:12px; padding:10px 6px; font-size:14px; cursor:pointer;}
+  #startWaveBtn.pulse{animation:pulse 1.1s infinite;}
+  #startWaveBtn:disabled{opacity:.35; cursor:default; animation:none;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(123,255,160,.55);}50%{box-shadow:0 0 0 10px rgba(123,255,160,0);}}
+  .overlay{position:fixed; inset:0; background:rgba(6,8,14,0.88); display:flex; align-items:center; justify-content:center; z-index:50; padding:16px;}
+  .overlay.hidden{display:none;}
+  .cardBox{background:var(--panel); border:1px solid #2a3350; border-radius:16px; padding:22px; max-width:520px; width:100%; max-height:88vh; overflow:auto;}
+  .cardBox h1{margin:0 0 4px; font-size:26px;} .cardBox h2{margin:0 0 14px; color:var(--muted); font-size:14px; font-weight:500;}
+  .cardBox p{color:var(--muted); font-size:13px; line-height:1.5;}
+  .row{display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;}
+  .btn{background:linear-gradient(160deg,#5ee8ff,#2f8fd6); color:#04141c; border:none; border-radius:10px; padding:11px 18px; font-weight:700; cursor:pointer; font-size:14px;}
+  .btn.alt{background:linear-gradient(160deg,#2a3350,#1a2033); color:var(--text); border:1px solid #37426b;}
+  .relicGrid{display:flex; flex-direction:column; gap:10px; margin-top:12px;}
+  .relicCard{background:var(--panel2); border:1px solid #2a3350; border-radius:12px; padding:12px 14px; cursor:pointer; transition:transform .12s,border-color .12s;}
+  .relicCard:active{transform:scale(0.97);}
+  .relicCard:hover{border-color:var(--accent);}
+  .relicCard b{color:var(--accent); font-size:14px;}
+  .relicCard div.d{color:var(--muted); font-size:12.5px; margin-top:3px;}
+  .metaRow{display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--panel2); border-radius:12px; padding:10px 14px; margin-top:10px;}
+  .metaRow .info b{display:block; font-size:14px;} .metaRow .info span{color:var(--muted); font-size:12px;}
+  .metaRow button{background:var(--gold); color:#221a00; border:none; border-radius:8px; padding:8px 12px; font-weight:700; cursor:pointer; white-space:nowrap;}
+  .metaRow button:disabled{opacity:.35; cursor:default;}
+  .statLine{display:flex; justify-content:space-between; font-size:13.5px; margin:4px 0; color:var(--muted);}
+  .statLine b{color:var(--text);}
+  #tip{position:absolute; bottom:6px; left:8px; right:8px; text-align:center; color:var(--muted); font-size:11.5px; pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="stat acc">🌊 <span id="hWave">0</span></div>
+    <div class="stat hp">❤ <span id="hLives">10</span></div>
+    <div class="stat gold">💰 <span id="hGold">0</span></div>
+    <div class="stat good">⭐ <span id="hScore">0</span></div>
+    <div class="stat">🔥x<span id="hMult">1.0</span></div>
+    <div class="spacer"></div>
+    <button id="muteBtn">🔊</button>
+    <button id="menuBtn">☰</button>
+  </div>
+  <div id="canvasWrap">
+    <canvas id="game" width="960" height="640"></canvas>
+    <div id="banner"></div>
+    <div id="tip">Tap a buy button, then tap an empty tile. Tap a tower, then tap a same tier+element tower to merge.</div>
+  </div>
+  <div id="toolbar">
+    <div class="buyBtn fire" data-el="fire">🔥 Fire<small id="costFire">20g</small></div>
+    <div class="buyBtn ice" data-el="ice">❄ Ice<small id="costIce">20g</small></div>
+    <div class="buyBtn lightning" data-el="lightning">⚡ Bolt<small id="costLightning">20g</small></div>
+    <button id="startWaveBtn">Start Wave 1</button>
+  </div>
+</div>
+
+<div id="menuOverlay" class="overlay">
+  <div class="cardBox">
+    <h1>🏰 Merge Keep</h1>
+    <h2>Tower Defense • Merging • Roguelike Runs</h2>
+    <p>Place elemental towers, merge matching pairs to power them up, and pick risky relics between waves. Lose your keep and you'll bank Essence to permanently strengthen future runs. One more run never hurt anyone.</p>
+    <div class="statLine">Best Score: <b id="menuBest">0</b></div>
+    <div class="statLine">Essence: <b id="menuEssence">0</b> ✨</div>
+    <div class="row">
+      <button class="btn" id="playBtn">▶ Play</button>
+      <button class="btn alt" id="shopBtn">✨ Meta Shop</button>
+    </div>
+  </div>
+</div>
+
+<div id="shopOverlay" class="overlay hidden">
+  <div class="cardBox">
+    <h1>✨ Meta Shop</h1>
+    <h2>Essence: <b id="shopEssence">0</b> — permanent upgrades, apply to every future run</h2>
+    <div id="shopList"></div>
+    <div class="row"><button class="btn alt" id="shopBackBtn">← Back</button></div>
+  </div>
+</div>
+
+<div id="relicOverlay" class="overlay hidden">
+  <div class="cardBox">
+    <h1 id="relicTitle">Wave Cleared!</h1>
+    <h2>Choose one relic for this run</h2>
+    <div class="relicGrid" id="relicGrid"></div>
+  </div>
+</div>
+
+<div id="gameoverOverlay" class="overlay hidden">
+  <div class="cardBox">
+    <h1>💀 Keep Overrun</h1>
+    <h2>Run summary</h2>
+    <div class="statLine">Wave reached: <b id="goWave">1</b></div>
+    <div class="statLine">Final score: <b id="goScore">0</b></div>
+    <div class="statLine">Essence earned: <b id="goEssence">0</b> ✨</div>
+    <div class="statLine">Best score: <b id="goBest">0</b></div>
+    <div class="row">
+      <button class="btn" id="againBtn">↻ Play Again</button>
+      <button class="btn alt" id="menuBackBtn">☰ Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ========================= CONFIG / GRID ========================= */
+const COLS=9, ROWS=9;
+const TILE_W=72, TILE_H=36, HALF_W=36, HALF_H=18;
+const ORIGIN_X=480, ORIGIN_Y=170;
+const TIER_MULT=[1,1.65,2.7,4.3,7];
+const ELEMENTS={
+  fire:{ name:'Fire', dmg:10, range:2.3, rate:1.0, colors:['#ffb066','#e0501f','#ff7a33'] },
+  ice:{ name:'Ice', dmg:6, range:2.1, rate:1.3, colors:['#bdf3ff','#1f9fe0','#6fd8ff'] },
+  lightning:{ name:'Bolt', dmg:7, range:2.5, rate:1.5, colors:['#ffe89a','#8a4fff','#c79bff'] }
+};
+const ELKEYS=Object.keys(ELEMENTS);
+
+function isoPos(c,r){ return { x: ORIGIN_X + (c-r)*HALF_W, y: ORIGIN_Y + (c+r)*HALF_H }; }
+
+function generatePath(){
+  const pts=[];
+  function hLine(row,c1,c2){ if(c1<=c2){for(let c=c1;c<=c2;c++)pts.push({c,r:row});} else {for(let c=c1;c>=c2;c--)pts.push({c,r:row});} }
+  function vLine(col,r1,r2){ if(r1<=r2){for(let r=r1;r<=r2;r++)pts.push({c:col,r});} else {for(let r=r1;r>=r2;r--)pts.push({c:col,r});} }
+  hLine(1,0,7); vLine(7,2,3); hLine(3,7,1); vLine(1,4,5); hLine(5,1,7); vLine(7,6,7); hLine(7,7,1); vLine(1,8,8);
+  const out=[pts[0]];
+  for(let i=1;i<pts.length;i++){ const p=pts[i], last=out[out.length-1]; if(p.c!==last.c||p.r!==last.r) out.push(p); }
+  return out;
+}
+const PATH = generatePath();
+const PATH_SET = new Set(PATH.map(p=>p.c+','+p.r));
+const SPAWN_PT = PATH[0], BASE_PT = PATH[PATH.length-1];
+function isBuildable(c,r){ return c>=0&&r>=0&&c<COLS&&r<ROWS&&!PATH_SET.has(c+','+r); }
+function pathPointAt(progress){
+  const i=Math.floor(progress), f=progress-i;
+  const a=PATH[Math.min(i,PATH.length-1)], b=PATH[Math.min(i+1,PATH.length-1)];
+  return { c:a.c+(b.c-a.c)*f, r:a.r+(b.r-a.r)*f };
+}
+
+/* ========================= STATE ========================= */
+let state=null;
+function freshState(meta){
+  return {
+    running:false, paused:false,
+    gold:100+meta.gold*15, lives:10+meta.life*1, maxLives:10+meta.life*1,
+    wave:0, score:0, streak:0, scoreMult:1,
+    waveActive:false, spawnQueue:[], spawnTimer:0,
+    towers:{}, enemies:[], projectiles:[], particles:[],
+    placingElement:null, selectedTowerKey:null,
+    shake:0, time:0,
+    modifiers:{ attackSpeedMult:1, goldMult:1, dmgMult:1+meta.dmg*0.04, critChance:0.05, critMult:2, rangeBonus:0,
+                specialMult:1, secondWindCharges:0, mergeBonusChance:0, costMult:1 },
+    activeRelics:new Set(), relicOfferPending:false
+  };
+}
+
+/* ========================= META / SAVE ========================= */
+const LS_META='td_meta_v1', LS_ESS='td_essence_v1', LS_BEST='td_best_v1';
+function loadMeta(){ try{ return Object.assign({gold:0,life:0,dmg:0}, JSON.parse(localStorage.getItem(LS_META))||{}); }catch(e){ return {gold:0,life:0,dmg:0}; } }
+function saveMeta(m){ localStorage.setItem(LS_META, JSON.stringify(m)); }
+function loadEssence(){ return parseInt(localStorage.getItem(LS_ESS)||'0',10)||0; }
+function saveEssence(v){ localStorage.setItem(LS_ESS, String(v)); }
+function loadBest(){ return parseInt(localStorage.getItem(LS_BEST)||'0',10)||0; }
+function saveBest(v){ localStorage.setItem(LS_BEST, String(v)); }
+
+const META_UPGRADES=[
+  {key:'gold', name:'Starter Capital', desc:'+15 starting gold per level', base:20, growth:1.5, max:10},
+  {key:'life', name:'Fortify Keep', desc:'+1 starting life per level', base:30, growth:1.6, max:5},
+  {key:'dmg', name:'Ancient Power', desc:'+4% global damage per level', base:25, growth:1.55, max:10}
+];
+function upgradeCost(u,level){ return Math.round(u.base*Math.pow(u.growth,level)); }
+
+/* ========================= AUDIO (WebAudio synth, no assets) ========================= */
+let actx=null, muted=false;
+function ensureAudio(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function tone(freq,dur,type,vol){
+  if(muted||!actx) return;
+  const t0=actx.currentTime;
+  const o=actx.createOscillator(), g=actx.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t0);
+  g.gain.setValueAtTime((vol||0.15),t0);
+  g.gain.exponentialRampToValueAtTime(0.001,t0+(dur||0.15));
+  o.connect(g); g.connect(actx.destination);
+  o.start(t0); o.stop(t0+(dur||0.15)+0.02);
+}
+function sfx(name){
+  if(muted) return; ensureAudio(); if(!actx) return;
+  switch(name){
+    case 'shoot': tone(520,0.06,'square',0.05); break;
+    case 'hit': tone(220,0.08,'square',0.06); break;
+    case 'kill': tone(660,0.12,'triangle',0.09); break;
+    case 'place': tone(340,0.09,'sine',0.12); break;
+    case 'merge': tone(440,0.08,'triangle',0.12); setTimeout(()=>tone(660,0.12,'triangle',0.12),70); break;
+    case 'wave': tone(200,0.18,'sawtooth',0.1); setTimeout(()=>tone(300,0.22,'sawtooth',0.1),120); break;
+    case 'lose': tone(300,0.14,'sawtooth',0.1); break;
+    case 'gameover': tone(220,0.3,'sawtooth',0.12); setTimeout(()=>tone(140,0.4,'sawtooth',0.12),180); break;
+    case 'relic': tone(500,0.1,'sine',0.1); setTimeout(()=>tone(760,0.16,'sine',0.1),90); break;
+  }
+}
+
+/* ========================= RELICS ========================= */
+const RELIC_POOL=[
+  {id:'overclock', name:'Overclock Core', desc:'+15% tower attack speed.', apply:m=>{m.attackSpeedMult+=0.15;}},
+  {id:'bloodmoney', name:'Blood Money', desc:'+20% gold from kills.', apply:m=>{m.goldMult+=0.2;}},
+  {id:'glasscannon', name:'Glass Cannon', desc:'+30% damage, but -1 max life. High risk, high reward.', apply:m=>{m.dmgMult+=0.3; state.maxLives=Math.max(1,state.maxLives-1); state.lives=Math.min(state.lives,state.maxLives);}},
+  {id:'lucky', name:'Lucky Strikes', desc:'+10% critical hit chance.', apply:m=>{m.critChance+=0.10;}},
+  {id:'sharpcrit', name:'Sharpened Crits', desc:'Critical hits deal +50% more damage.', apply:m=>{m.critMult+=0.5;}},
+  {id:'elemental', name:'Elemental Surge', desc:'+30% strength to splash / slow / chain effects.', apply:m=>{m.specialMult+=0.3;}},
+  {id:'secondwind', name:'Second Wind', desc:'Cheat death once — survive at 1 life instead of losing.', apply:m=>{m.secondWindCharges+=1;}},
+  {id:'rangefinder', name:'Range Finder', desc:'+0.4 range on all towers.', apply:m=>{m.rangeBonus+=0.4;}},
+  {id:'mergemaster', name:'Merge Master', desc:'20% chance a merge grants an extra free tier.', apply:m=>{m.mergeBonusChance+=0.2;}},
+  {id:'frugal', name:'Frugal Architect', desc:'-15% cost on new towers.', apply:m=>{m.costMult=Math.max(0.4,m.costMult-0.15);}}
+];
+function offerRelics(){
+  const available=RELIC_POOL.filter(r=>!state.activeRelics.has(r.id));
+  const pool=available.length>=3?available:RELIC_POOL;
+  const picks=[]; const used=new Set();
+  while(picks.length<3 && picks.length<pool.length){
+    const idx=Math.floor(Math.random()*pool.length);
+    if(used.has(idx)) continue; used.add(idx); picks.push(pool[idx]);
+  }
+  return picks;
+}
+
+/* ========================= ENEMY DEFS ========================= */
+function buildWaveQueue(wave){
+  const q=[];
+  const count=6+wave*2;
+  for(let i=0;i<count;i++){
+    let type='grunt';
+    const roll=Math.random();
+    if(wave>2 && roll<0.22) type='runner';
+    else if(wave>3 && roll<0.42) type='tank';
+    q.push(makeEnemySpec(type,wave));
+  }
+  if(wave%5===0) q.push(makeEnemySpec('boss',wave));
+  return q;
+}
+function makeEnemySpec(type,wave){
+  const base={
+    grunt:{hp:20+wave*6, speed:1.0, gold:3+wave*0.25, score:10, dmg:1, size:14, color:'#7bd47b'},
+    runner:{hp:12+wave*4, speed:1.9, gold:2+wave*0.2, score:8, dmg:1, size:11, color:'#ffe066'},
+    tank:{hp:60+wave*13, speed:0.6, gold:6+wave*0.4, score:22, dmg:2, size:18, color:'#c97bd4'},
+    boss:{hp:320+wave*45, speed:0.5, gold:40+wave*2, score:120, dmg:5, size:26, color:'#ff5d73'}
+  }[type];
+  return Object.assign({type}, base);
+}
+
+/* ========================= TOWERS ========================= */
+function towerKey(c,r){ return c+','+r; }
+function placeTower(c,r,element){
+  const cost=Math.round((20+state.wave*4)*state.modifiers.costMult);
+  if(state.gold<cost) return false;
+  if(!isBuildable(c,r)) return false;
+  const key=towerKey(c,r);
+  if(state.towers[key]) return false;
+  state.gold-=cost;
+  state.towers[key]={c,r,element,tier:1,cooldown:0,flash:0};
+  sfx('place');
+  return true;
+}
+function towerStats(t){
+  const base=ELEMENTS[t.element];
+  const mult=TIER_MULT[t.tier-1];
+  return {
+    dmg: base.dmg*mult*state.modifiers.dmgMult,
+    range: base.range+state.modifiers.rangeBonus,
+    rate: base.rate*state.modifiers.attackSpeedMult
+  };
+}
+function tryMerge(aKey,bKey){
+  const a=state.towers[aKey], b=state.towers[bKey];
+  if(!a||!b||a===b) return false;
+  if(a.element!==b.element||a.tier!==b.tier) return false;
+  if(a.tier>=5) return false;
+  b.tier+=1;
+  if(Math.random()<state.modifiers.mergeBonusChance && b.tier<5) b.tier+=1;
+  b.flash=0.4;
+  delete state.towers[aKey];
+  sfx('merge');
+  spawnBurst(b.c,b.r,ELEMENTS[b.element].colors[2]);
+  return true;
+}
+
+/* ========================= COMBAT ========================= */
+function gridDist(c1,r1,c2,r2){ return Math.hypot(c1-c2,r1-r2); }
+function findTarget(t){
+  const st=towerStats(t);
+  let best=null,bestProg=-1;
+  for(const e of state.enemies){
+    if(e.dead) continue;
+    const p=pathPointAt(e.progress);
+    const d=gridDist(t.c,t.r,p.c,p.r);
+    if(d<=st.range && e.progress>bestProg){ best=e; bestProg=e.progress; }
+  }
+  return best;
+}
+function applyDamage(e,dmg){
+  let d=dmg;
+  let crit=false;
+  if(Math.random()<state.modifiers.critChance){ d*=state.modifiers.critMult; crit=true; }
+  e.hp-=d;
+  spawnParticle(e.pos.x,e.pos.y,crit?'#ffe066':'#ffffff', crit?1.4:0.8);
+  if(e.hp<=0 && !e.dead){ killEnemy(e); }
+  return crit;
+}
+function killEnemy(e){
+  e.dead=true;
+  state.gold+=Math.round(e.gold*state.modifiers.goldMult);
+  state.streak+=1;
+  state.scoreMult=1+Math.min(state.streak,100)*0.01;
+  state.score+=Math.round(e.score*state.scoreMult);
+  sfx('kill');
+  spawnBurst(e.pos.gc, e.pos.gr, e.color, true);
+}
+function fireTower(t,target){
+  const st=towerStats(t);
+  const from=isoPos(t.c,t.r);
+  const targetPos=Object.assign({}, target.pos);
+  sfx('shoot');
+  applyDamage(target, st.dmg);
+  if(t.element==='ice'){
+    target.slowFactor=Math.max(0.4, 1-(0.25+ (t.tier>=3?0.15:0))*state.modifiers.specialMult);
+    target.slowTimer=1.5;
+    if(t.tier>=3){
+      for(const e of state.enemies){ if(e===target||e.dead) continue;
+        const p=pathPointAt(e.progress);
+        if(gridDist(target.pos.gc,target.pos.gr,p.c,p.r)<=1.0){ e.slowFactor=Math.max(0.5,1-0.2*state.modifiers.specialMult); e.slowTimer=1.2; }
+      }
+    }
+  } else if(t.element==='fire' && t.tier>=3){
+    const radius=1.2*state.modifiers.specialMult;
+    for(const e of state.enemies){ if(e===target||e.dead) continue;
+      const p=pathPointAt(e.progress);
+      if(gridDist(target.pos.gc,target.pos.gr,p.c,p.r)<=radius) applyDamage(e, st.dmg*0.5);
+    }
+  } else if(t.element==='lightning'){
+    let chains = t.tier>=3?3:1;
+    let dmg=st.dmg*0.7;
+    let last=target; const hit=new Set([target]);
+    for(let i=0;i<chains;i++){
+      let next=null,bestD=999;
+      for(const e of state.enemies){ if(e.dead||hit.has(e)) continue;
+        const p1=pathPointAt(last.progress), p2=pathPointAt(e.progress);
+        const d=gridDist(p1.c,p1.r,p2.c,p2.r);
+        if(d<2.0 && d<bestD){ bestD=d; next=e; }
+      }
+      if(!next) break;
+      applyDamage(next, dmg*state.modifiers.specialMult);
+      hit.add(next); last=next; dmg*=0.7;
+    }
+  }
+  state.projectiles.push({from, to:targetPos, color:ELEMENTS[t.element].colors[2], t:0, dur:0.18});
+  t.flash=0.25;
+}
+
+/* ========================= PARTICLES ========================= */
+function spawnParticle(x,y,color,scale){
+  state.particles.push({x,y,life:0.35,maxLife:0.35,color,scale:scale||1,type:'hit'});
+}
+function spawnBurst(gc,gr,color,big){
+  const p=isoPos(gc,gr);
+  for(let i=0;i<(big?14:8);i++){
+    const ang=Math.random()*Math.PI*2, spd=(big?60:35)*Math.random();
+    state.particles.push({x:p.x,y:p.y-10,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd*0.6-20,life:0.6,maxLife:0.6,color,scale:big?1.2:0.8,type:'burst'});
+  }
+}
+
+/* ========================= WAVE FLOW ========================= */
+function startNextWave(){
+  state.wave+=1;
+  state.spawnQueue=buildWaveQueue(state.wave);
+  state.spawnTimer=0;
+  state.waveActive=true;
+  sfx('wave');
+  showBanner('Wave '+state.wave+' incoming!');
+  document.getElementById('startWaveBtn').disabled=true;
+  document.getElementById('startWaveBtn').classList.remove('pulse');
+  document.getElementById('startWaveBtn').textContent='Wave '+state.wave+' in progress...';
+}
+function onWaveComplete(){
+  state.gold += 10+state.wave*2;
+  showBanner('Wave '+state.wave+' cleared! +'+(10+state.wave*2)+'g');
+  sfx('relic');
+  openRelicModal();
+}
+let bannerTimer=null;
+function showBanner(text){
+  const b=document.getElementById('banner');
+  b.textContent=text; b.classList.add('show');
+  clearTimeout(bannerTimer);
+  bannerTimer=setTimeout(()=>b.classList.remove('show'),1800);
+}
+
+/* ========================= UPDATE LOOP ========================= */
+function spawnEnemyFromSpec(spec){
+  const startP=isoPos(SPAWN_PT.c,SPAWN_PT.r);
+  state.enemies.push({
+    type:spec.type, hp:spec.hp, maxHp:spec.hp, speed:spec.speed, gold:spec.gold, score:spec.score, dmg:spec.dmg,
+    size:spec.size, color:spec.color, progress:0, dead:false, slowFactor:1, slowTimer:0, bob:Math.random()*10,
+    pos:{x:startP.x,y:startP.y,gc:SPAWN_PT.c,gr:SPAWN_PT.r}
+  });
+}
+function update(dt){
+  state.time+=dt;
+  if(state.shake>0) state.shake=Math.max(0,state.shake-dt*3);
+  if(state.paused) return;
+
+  if(state.waveActive){
+    state.spawnTimer-=dt;
+    if(state.spawnTimer<=0 && state.spawnQueue.length){
+      spawnEnemyFromSpec(state.spawnQueue.shift());
+      state.spawnTimer=Math.max(0.32, 0.85-state.wave*0.02);
+    }
+    if(!state.spawnQueue.length && state.enemies.every(e=>e.dead)){
+      state.waveActive=false;
+      onWaveComplete();
+    }
+  }
+
+  for(const e of state.enemies){
+    if(e.dead) continue;
+    if(e.slowTimer>0){ e.slowTimer-=dt; if(e.slowTimer<=0) e.slowFactor=1; }
+    e.progress += e.speed*e.slowFactor*dt;
+    const gp=pathPointAt(Math.min(e.progress,PATH.length-1));
+    const sp=isoPos(gp.c,gp.r);
+    e.pos={x:sp.x,y:sp.y,gc:gp.c,gr:gp.r};
+    if(e.progress>=PATH.length-1){
+      e.dead=true;
+      state.lives-=e.dmg;
+      state.streak=0; state.scoreMult=1;
+      state.shake=Math.min(1,state.shake+0.4);
+      sfx('lose');
+      if(state.lives<=0){
+        if(state.modifiers.secondWindCharges>0){
+          state.modifiers.secondWindCharges-=1;
+          state.lives=1;
+          showBanner('Second Wind! Saved from defeat.');
+        } else {
+          state.lives=0;
+          triggerGameOver();
+          return;
+        }
+      }
+    }
+  }
+  state.enemies=state.enemies.filter(e=>!e.dead);
+
+  for(const key in state.towers){
+    const t=state.towers[key];
+    if(t.flash>0) t.flash=Math.max(0,t.flash-dt*2);
+    t.cooldown-=dt;
+    if(t.cooldown<=0){
+      const target=findTarget(t);
+      if(target){
+        const st=towerStats(t);
+        fireTower(t,target);
+        t.cooldown=1/st.rate;
+      }
+    }
+  }
+
+  for(const p of state.projectiles) p.t+=dt;
+  state.projectiles=state.projectiles.filter(p=>p.t<p.dur);
+
+  for(const p of state.particles){
+    p.life-=dt;
+    if(p.type==='burst'){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=140*dt; }
+  }
+  state.particles=state.particles.filter(p=>p.life>0);
+
+  updateHUD();
+}
+
+function triggerGameOver(){
+  state.running=false; state.paused=true;
+  sfx('gameover');
+  const essenceGain=Math.floor(state.score/50)+state.wave;
+  let essence=loadEssence()+essenceGain; saveEssence(essence);
+  let best=loadBest(); if(state.score>best){ best=state.score; saveBest(best); }
+  document.getElementById('goWave').textContent=state.wave;
+  document.getElementById('goScore').textContent=state.score;
+  document.getElementById('goEssence').textContent=essenceGain;
+  document.getElementById('goBest').textContent=best;
+  document.getElementById('gameoverOverlay').classList.remove('hidden');
+}
+
+/* ========================= RENDER ========================= */
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+
+function shadeColor(hex,pct){
+  const c=parseInt(hex.slice(1),16);
+  let r=(c>>16)&255,g=(c>>8)&255,b=c&255;
+  r=Math.max(0,Math.min(255,Math.round(r*pct)));
+  g=Math.max(0,Math.min(255,Math.round(g*pct)));
+  b=Math.max(0,Math.min(255,Math.round(b*pct)));
+  return 'rgb('+r+','+g+','+b+')';
+}
+
+function drawTile(c,r,depth){
+  const p=isoPos(c,r);
+  const onPath=PATH_SET.has(c+','+r);
+  const top = onPath ? '#8a6a45' : ((c+r)%2===0?'#2f5f38':'#356b3f');
+  const left= shadeColor(top,0.62);
+  const right=shadeColor(top,0.8);
+  ctx.beginPath();
+  ctx.moveTo(p.x-HALF_W,p.y); ctx.lineTo(p.x,p.y+HALF_H); ctx.lineTo(p.x,p.y+HALF_H+depth); ctx.lineTo(p.x-HALF_W,p.y+depth); ctx.closePath();
+  ctx.fillStyle=left; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y+HALF_H); ctx.lineTo(p.x+HALF_W,p.y); ctx.lineTo(p.x+HALF_W,p.y+depth); ctx.lineTo(p.x,p.y+HALF_H+depth); ctx.closePath();
+  ctx.fillStyle=right; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y-HALF_H); ctx.lineTo(p.x+HALF_W,p.y); ctx.lineTo(p.x,p.y+HALF_H); ctx.lineTo(p.x-HALF_W,p.y); ctx.closePath();
+  ctx.fillStyle=top; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=1; ctx.stroke();
+
+  if(!onPath){
+    const key=c+','+r;
+    const buildable=isBuildable(c,r);
+    if(state.placingElement && buildable && !state.towers[key]){
+      ctx.beginPath();
+      ctx.moveTo(p.x,p.y-HALF_H); ctx.lineTo(p.x+HALF_W,p.y); ctx.lineTo(p.x,p.y+HALF_H); ctx.lineTo(p.x-HALF_W,p.y); ctx.closePath();
+      ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fill();
+    }
+  }
+}
+
+function drawIsoBox(cx,groundY,w,h,colors){
+  const hw=w/2;
+  ctx.beginPath();
+  ctx.moveTo(cx-hw,groundY); ctx.lineTo(cx,groundY+hw*0.5); ctx.lineTo(cx,groundY+hw*0.5-h); ctx.lineTo(cx-hw,groundY-h); ctx.closePath();
+  ctx.fillStyle=colors[0]; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx,groundY+hw*0.5); ctx.lineTo(cx+hw,groundY); ctx.lineTo(cx+hw,groundY-h); ctx.lineTo(cx,groundY+hw*0.5-h); ctx.closePath();
+  ctx.fillStyle=colors[1]; ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx-hw,groundY-h); ctx.lineTo(cx,groundY+hw*0.5-h); ctx.lineTo(cx+hw,groundY-h); ctx.lineTo(cx,groundY-hw*0.5-h); ctx.closePath();
+  ctx.fillStyle=colors[2]; ctx.fill();
+}
+
+function drawTower(t){
+  const p=isoPos(t.c,t.r);
+  const el=ELEMENTS[t.element];
+  const h=18+t.tier*9;
+  const w=22+t.tier*3;
+  const flashBoost=t.flash>0? (1+t.flash*0.6):1;
+  const cols=[shadeColor(el.colors[1],0.7*flashBoost), shadeColor(el.colors[1],0.9*flashBoost), shadeColor(el.colors[0],1*flashBoost)];
+  drawIsoBox(p.x,p.y+HALF_H*0.4,w,h,cols);
+  ctx.font='bold 11px sans-serif'; ctx.fillStyle='#ffffff'; ctx.textAlign='center';
+  ctx.fillText('T'+t.tier, p.x, p.y-h-4);
+  if(state.selectedTowerKey===towerKey(t.c,t.r)){
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y-HALF_H-2); ctx.lineTo(p.x+HALF_W+2,p.y); ctx.lineTo(p.x,p.y+HALF_H+2); ctx.lineTo(p.x-HALF_W-2,p.y); ctx.closePath();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2.4; ctx.stroke();
+  }
+}
+
+function drawBase(){
+  const p=isoPos(BASE_PT.c,BASE_PT.r);
+  drawIsoBox(p.x,p.y+HALF_H*0.4,46,46,['#5a5f78','#7a80a0','#9aa0c0']);
+  ctx.font='16px sans-serif'; ctx.textAlign='center'; ctx.fillText('🏰',p.x,p.y-30);
+}
+
+function drawEnemy(e){
+  const bob=Math.sin(state.time*6+e.bob)*3;
+  const x=e.pos.x, y=e.pos.y-10+bob;
+  const grad=ctx.createRadialGradient(x-e.size*0.3,y-e.size*0.3,2,x,y,e.size);
+  grad.addColorStop(0,shadeColor(e.color,1.3));
+  grad.addColorStop(1,shadeColor(e.color,0.6));
+  ctx.beginPath(); ctx.ellipse(x,y,e.size*0.5,4,0,0,Math.PI*2); ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x,y,e.size*0.6,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+  if(e.slowFactor<1){ ctx.beginPath(); ctx.arc(x,y,e.size*0.6+2,0,Math.PI*2); ctx.strokeStyle='#7fdfff'; ctx.lineWidth=2; ctx.stroke(); }
+  const hpw=e.size*1.3;
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(x-hpw/2,y-e.size*0.6-10,hpw,4);
+  ctx.fillStyle='#7bffa0'; ctx.fillRect(x-hpw/2,y-e.size*0.6-10,hpw*Math.max(0,e.hp/e.maxHp),4);
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  if(state.shake>0){ ctx.translate((Math.random()-0.5)*state.shake*8,(Math.random()-0.5)*state.shake*8); }
+
+  const tiles=[];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) tiles.push({c,r});
+  tiles.sort((a,b)=>(a.c+a.r)-(b.c+b.r));
+  for(const tl of tiles) drawTile(tl.c,tl.r,10);
+
+  const entities=[];
+  for(const key in state.towers){ const t=state.towers[key]; entities.push({depth:t.c+t.r+0.1, draw:()=>drawTower(t)}); }
+  entities.push({depth:BASE_PT.c+BASE_PT.r+0.05, draw:drawBase});
+  for(const e of state.enemies){ entities.push({depth:e.pos.gc+e.pos.gr+0.2, draw:()=>drawEnemy(e)}); }
+  entities.sort((a,b)=>a.depth-b.depth);
+  for(const en of entities) en.draw();
+
+  for(const pr of state.projectiles){
+    const f=pr.t/pr.dur;
+    const x=pr.from.x+(pr.to.x-pr.from.x)*f;
+    const y=pr.from.y-10+(pr.to.y-10-(pr.from.y-10))*f - Math.sin(f*Math.PI)*18;
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fillStyle=pr.color; ctx.shadowColor=pr.color; ctx.shadowBlur=8; ctx.fill(); ctx.shadowBlur=0;
+  }
+
+  for(const p of state.particles){
+    const f=p.life/p.maxLife;
+    ctx.globalAlpha=Math.max(0,f);
+    ctx.beginPath(); ctx.arc(p.x,p.y,3*p.scale*(1.4-f*0.5),0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill();
+    ctx.globalAlpha=1;
+  }
+
+  ctx.restore();
+}
+
+/* ========================= HUD ========================= */
+function updateHUD(){
+  document.getElementById('hWave').textContent=state.wave;
+  document.getElementById('hLives').textContent=state.lives;
+  document.getElementById('hGold').textContent=state.gold;
+  document.getElementById('hScore').textContent=state.score;
+  document.getElementById('hMult').textContent=state.scoreMult.toFixed(1);
+  const cost=Math.round((20+state.wave*4)*state.modifiers.costMult);
+  ['fire','ice','lightning'].forEach(k=>{
+    document.getElementById('cost'+k.charAt(0).toUpperCase()+k.slice(1)).textContent=cost+'g';
+    const btn=document.querySelector('.buyBtn.'+k);
+    btn.classList.toggle('disabled', state.gold<cost);
+  });
+}
+
+/* ========================= INPUT ========================= */
+function screenToGrid(px,py){
+  const rect=canvas.getBoundingClientRect();
+  const sx=(px-rect.left)*(canvas.width/rect.width);
+  const sy=(py-rect.top)*(canvas.height/rect.height);
+  const dx=sx-ORIGIN_X, dy=sy-ORIGIN_Y;
+  const cf=(dx/HALF_W + dy/HALF_H)/2;
+  const rf=(dy/HALF_H - dx/HALF_W)/2;
+  return { c:Math.round(cf), r:Math.round(rf) };
+}
+function handleTapAt(px,py){
+  if(!state.running||state.paused) return;
+  const {c,r}=screenToGrid(px,py);
+  if(c<0||r<0||c>=COLS||r>=ROWS) return;
+  const key=towerKey(c,r);
+
+  if(state.placingElement){
+    if(!state.towers[key] && isBuildable(c,r)){
+      if(placeTower(c,r,state.placingElement)){
+        clearPlacing();
+        updateHUD();
+      }
+    }
+    return;
+  }
+
+  if(state.towers[key]){
+    if(!state.selectedTowerKey){
+      state.selectedTowerKey=key;
+    } else if(state.selectedTowerKey===key){
+      state.selectedTowerKey=null;
+    } else {
+      const merged=tryMerge(state.selectedTowerKey,key);
+      state.selectedTowerKey=merged?null:key;
+    }
+  } else {
+    state.selectedTowerKey=null;
+  }
+}
+canvas.addEventListener('click',e=>{ ensureAudio(); handleTapAt(e.clientX,e.clientY); });
+canvas.addEventListener('touchstart',e=>{
+  ensureAudio();
+  e.preventDefault();
+  const t=e.changedTouches[0];
+  handleTapAt(t.clientX,t.clientY);
+},{passive:false});
+
+function clearPlacing(){
+  state.placingElement=null;
+  document.querySelectorAll('.buyBtn').forEach(b=>b.classList.remove('selected'));
+}
+document.querySelectorAll('.buyBtn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    ensureAudio();
+    if(!state.running||state.paused) return;
+    const el=btn.dataset.el;
+    if(state.placingElement===el){ clearPlacing(); return; }
+    state.placingElement=el; state.selectedTowerKey=null;
+    document.querySelectorAll('.buyBtn').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected');
+  });
+});
+
+document.getElementById('startWaveBtn').addEventListener('click',()=>{
+  ensureAudio();
+  if(!state.running||state.waveActive) return;
+  startNextWave();
+});
+
+document.getElementById('muteBtn').addEventListener('click',()=>{
+  muted=!muted;
+  document.getElementById('muteBtn').textContent=muted?'🔇':'🔊';
+});
+document.getElementById('menuBtn').addEventListener('click',()=>{
+  state.paused=true;
+  document.getElementById('menuOverlay').classList.remove('hidden');
+  refreshMenuStats();
+});
+
+/* ========================= RELIC MODAL ========================= */
+function openRelicModal(){
+  state.paused=true;
+  const picks=offerRelics();
+  const grid=document.getElementById('relicGrid');
+  grid.innerHTML='';
+  picks.forEach(r=>{
+    const card=document.createElement('div');
+    card.className='relicCard';
+    card.innerHTML='<b>'+r.name+'</b><div class="d">'+r.desc+'</div>';
+    card.addEventListener('click',()=>{
+      r.apply(state.modifiers);
+      state.activeRelics.add(r.id);
+      document.getElementById('relicOverlay').classList.add('hidden');
+      state.paused=false;
+      const btn=document.getElementById('startWaveBtn');
+      btn.disabled=false; btn.classList.add('pulse');
+      btn.textContent='Start Wave '+(state.wave+1);
+    });
+    grid.appendChild(card);
+  });
+  document.getElementById('relicTitle').textContent='Wave '+state.wave+' Cleared!';
+  document.getElementById('relicOverlay').classList.remove('hidden');
+}
+
+/* ========================= MENU / SHOP ========================= */
+function refreshMenuStats(){
+  document.getElementById('menuBest').textContent=loadBest();
+  document.getElementById('menuEssence').textContent=loadEssence();
+}
+document.getElementById('playBtn').addEventListener('click',()=>{
+  ensureAudio();
+  document.getElementById('menuOverlay').classList.add('hidden');
+  startRun();
+});
+document.getElementById('shopBtn').addEventListener('click',()=>{
+  document.getElementById('menuOverlay').classList.add('hidden');
+  renderShop();
+  document.getElementById('shopOverlay').classList.remove('hidden');
+});
+document.getElementById('shopBackBtn').addEventListener('click',()=>{
+  document.getElementById('shopOverlay').classList.add('hidden');
+  document.getElementById('menuOverlay').classList.remove('hidden');
+  refreshMenuStats();
+});
+document.getElementById('againBtn').addEventListener('click',()=>{
+  document.getElementById('gameoverOverlay').classList.add('hidden');
+  startRun();
+});
+document.getElementById('menuBackBtn').addEventListener('click',()=>{
+  document.getElementById('gameoverOverlay').classList.add('hidden');
+  document.getElementById('menuOverlay').classList.remove('hidden');
+  refreshMenuStats();
+});
+
+function renderShop(){
+  const meta=loadMeta();
+  const essence=loadEssence();
+  document.getElementById('shopEssence').textContent=essence;
+  const list=document.getElementById('shopList');
+  list.innerHTML='';
+  META_UPGRADES.forEach(u=>{
+    const level=meta[u.key]||0;
+    const cost=upgradeCost(u,level);
+    const maxed=level>=u.max;
+    const row=document.createElement('div');
+    row.className='metaRow';
+    row.innerHTML='<div class="info"><b>'+u.name+' (Lv '+level+'/'+u.max+')</b><span>'+u.desc+'</span></div>'+
+      '<button '+(maxed||essence<cost?'disabled':'')+'>'+(maxed?'MAX':cost+' ✨')+'</button>';
+    row.querySelector('button').addEventListener('click',()=>{
+      const m=loadMeta();
+      const lvl=m[u.key]||0;
+      const c=upgradeCost(u,lvl);
+      const ess=loadEssence();
+      if(lvl>=u.max||ess<c) return;
+      m[u.key]=lvl+1;
+      saveMeta(m);
+      saveEssence(ess-c);
+      renderShop();
+    });
+    list.appendChild(row);
+  });
+}
+
+/* ========================= RUN LIFECYCLE ========================= */
+function startRun(){
+  const meta=loadMeta();
+  state=freshState(meta);
+  state.running=true; state.paused=false;
+  clearPlacing();
+  document.querySelectorAll('.buyBtn').forEach(b=>b.classList.remove('selected'));
+  const btn=document.getElementById('startWaveBtn');
+  btn.disabled=false; btn.classList.add('pulse'); btn.textContent='Start Wave 1';
+  document.getElementById('gameoverOverlay').classList.add('hidden');
+  document.getElementById('relicOverlay').classList.add('hidden');
+  document.getElementById('menuOverlay').classList.add('hidden');
+  updateHUD();
+}
+
+/* ========================= MAIN LOOP ========================= */
+let lastT=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-lastT)/1000);
+  lastT=now;
+  if(state){ update(dt); draw(); }
+  requestAnimationFrame(frame);
+}
+
+/* init: build placeholder state so menu can show stats even before first run */
+state=freshState(loadMeta());
+refreshMenuStats();
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>

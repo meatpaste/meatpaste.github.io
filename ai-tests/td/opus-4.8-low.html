@@ -1,0 +1,710 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>MERGE KEEP — 3D Tower Defense Roguelike</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { height:100%; overflow:hidden; background:#05060a; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#e8ecff; }
+  #wrap { position:fixed; inset:0; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+
+  .hud { position:absolute; left:0; right:0; top:0; padding:10px 12px; display:flex; gap:8px; align-items:center; pointer-events:none; z-index:5; }
+  .pill { background:rgba(12,16,30,.72); border:1px solid rgba(120,150,255,.25); border-radius:12px; padding:6px 11px; font-size:13px; font-weight:700; backdrop-filter:blur(6px); display:flex; gap:6px; align-items:center; }
+  .pill small { opacity:.6; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.5px; }
+  .spacer { flex:1; }
+
+  #shop { position:absolute; left:0; right:0; bottom:0; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); display:flex; gap:8px; z-index:5; }
+  .btn { flex:1; background:linear-gradient(180deg,rgba(40,55,105,.95),rgba(20,26,50,.95)); border:1px solid rgba(120,150,255,.35); border-radius:14px; padding:12px 8px; text-align:center; cursor:pointer; transition:transform .08s, filter .12s; }
+  .btn:active { transform:scale(.95); }
+  .btn.dis { filter:grayscale(.7) brightness(.6); }
+  .btn .t { font-size:14px; font-weight:800; }
+  .btn .c { font-size:12px; opacity:.85; margin-top:2px; }
+  .btn .c b { color:#ffd76a; }
+
+  #startBtn { pointer-events:auto; }
+  #waveBtn { background:linear-gradient(180deg,rgba(60,180,110,.95),rgba(30,110,70,.95)); border-color:rgba(120,255,180,.4); flex:0 0 auto; padding:12px 16px; }
+
+  .overlay { position:absolute; inset:0; background:radial-gradient(circle at 50% 40%,rgba(20,30,70,.85),rgba(3,4,10,.96)); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; z-index:20; }
+  .overlay h1 { font-size:38px; font-weight:900; letter-spacing:1px; background:linear-gradient(90deg,#7aa2ff,#c79bff,#ff9bd6); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .overlay p { max-width:440px; margin:14px 0; opacity:.8; line-height:1.5; font-size:14px; }
+  .big { pointer-events:auto; margin-top:12px; background:linear-gradient(180deg,#7aa2ff,#4d63d6); border:none; border-radius:16px; padding:16px 40px; font-size:18px; font-weight:900; color:#fff; cursor:pointer; box-shadow:0 8px 30px rgba(90,120,255,.5); }
+  .big:active { transform:scale(.96); }
+  .meta { margin-top:18px; font-size:12px; opacity:.7; }
+  .meta b { color:#ffd76a; }
+  .hidden { display:none !important; }
+
+  #cards { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; max-width:560px; }
+  .card { pointer-events:auto; width:150px; background:linear-gradient(180deg,rgba(40,50,95,.95),rgba(18,22,44,.95)); border:1px solid rgba(140,160,255,.4); border-radius:16px; padding:16px 12px; cursor:pointer; transition:transform .1s; }
+  .card:active { transform:scale(.95); }
+  .card .ic { font-size:30px; }
+  .card .ti { font-weight:800; margin:8px 0 4px; font-size:15px; }
+  .card .de { font-size:12px; opacity:.8; line-height:1.4; }
+  .toast { position:absolute; left:50%; top:64px; transform:translateX(-50%); background:rgba(10,14,26,.9); border:1px solid rgba(120,150,255,.3); padding:8px 16px; border-radius:20px; font-size:13px; font-weight:700; z-index:15; opacity:0; transition:opacity .25s; }
+</style>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="pill">❤️ <span id="hp">20</span></div>
+    <div class="pill">💰 <span id="gold">0</span></div>
+    <div class="pill"><small>Wave</small> <span id="wave">0</span></div>
+    <div class="spacer"></div>
+    <div class="pill">⭐ <span id="cores">0</span></div>
+  </div>
+
+  <div id="shop">
+    <div class="btn" id="buyBtn" onclick="G.buyTower()">
+      <div class="t">➕ Deploy</div>
+      <div class="c">Lv1 turret <b id="buyCost">10</b>💰</div>
+    </div>
+    <div class="btn" id="waveBtn" onclick="G.startWave()">
+      <div class="t">▶ Wave</div>
+      <div class="c" id="waveHint">+bonus</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="startOverlay">
+    <h1>MERGE KEEP</h1>
+    <p>Drag <b>turrets</b> onto the grid. Drag one turret onto another of the <b>same level to MERGE</b> it into something stronger. Survive the waves, pick a <b>power</b> each round, and don't let creeps reach your keep.</p>
+    <p style="font-size:13px;opacity:.65">Tap Deploy to buy · drag to place & merge · tap ▶ to send the next wave early for bonus gold.</p>
+    <button class="big" id="startBtn" onclick="G.start()">PLAY</button>
+    <div class="meta" id="metaLine"></div>
+  </div>
+
+  <div class="overlay hidden" id="cardOverlay">
+    <h1 style="font-size:26px">CHOOSE A POWER</h1>
+    <div id="cards"></div>
+  </div>
+
+  <div class="overlay hidden" id="deadOverlay">
+    <h1 style="font-size:32px">KEEP FALLEN</h1>
+    <p id="deadStats"></p>
+    <p class="meta">Earned <b id="earnCores">0</b> ⭐ Cores this run. Spend them to start stronger — every run counts.</p>
+    <div id="upgrades" style="display:flex;flex-direction:column;gap:8px;max-width:340px;width:100%"></div>
+    <button class="big" id="againBtn" onclick="G.reset()">RUN AGAIN</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+"use strict";
+//========================================================================
+//  Minimal WebGL 3D engine (no dependencies)
+//========================================================================
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl', {antialias:true, alpha:false});
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = cv.clientWidth; H = cv.clientHeight;
+  cv.width = W*DPR; cv.height = H*DPR;
+  gl.viewport(0,0,cv.width,cv.height);
+}
+window.addEventListener('resize',resize);
+
+// --- tiny mat4 ---
+const M4 = {
+  ident:()=>[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
+  mul(a,b){const o=new Array(16);for(let r=0;r<4;r++)for(let c=0;c<4;c++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+r]*b[c*4+k];o[c*4+r]=s;}return o;},
+  persp(fov,asp,n,f){const t=1/Math.tan(fov/2);return[t/asp,0,0,0, 0,t,0,0, 0,0,(f+n)/(n-f),-1, 0,0,2*f*n/(n-f),0];},
+  translate(x,y,z){const m=M4.ident();m[12]=x;m[13]=y;m[14]=z;return m;},
+  scale(x,y,z){const m=M4.ident();m[0]=x;m[5]=y;m[10]=z;return m;},
+  rotY(a){const c=Math.cos(a),s=Math.sin(a);const m=M4.ident();m[0]=c;m[2]=-s;m[8]=s;m[10]=c;return m;},
+  rotX(a){const c=Math.cos(a),s=Math.sin(a);const m=M4.ident();m[5]=c;m[6]=s;m[9]=-s;m[10]=c;return m;},
+  lookAt(e,c,u){
+    const z=norm(sub(e,c)),x=norm(cross(u,z)),y=cross(z,x);
+    return[x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+      -dot(x,e),-dot(y,e),-dot(z,e),1];
+  }
+};
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const norm=a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l];};
+
+// --- shader ---
+function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(s));return s;}
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER,`
+  attribute vec3 aPos; attribute vec3 aNorm;
+  uniform mat4 uProj,uView,uModel; uniform mat4 uNormMat;
+  varying vec3 vN; varying vec3 vW;
+  void main(){
+    vec4 w = uModel*vec4(aPos,1.0);
+    vW = w.xyz;
+    vN = mat3(uNormMat)*aNorm;
+    gl_Position = uProj*uView*w;
+  }`));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER,`
+  precision mediump float;
+  varying vec3 vN; varying vec3 vW;
+  uniform vec3 uColor; uniform float uEmit; uniform vec3 uCam;
+  void main(){
+    vec3 N=normalize(vN);
+    vec3 L=normalize(vec3(0.4,1.0,0.3));
+    float d=max(dot(N,L),0.0);
+    vec3 V=normalize(uCam-vW);
+    vec3 Hd=normalize(L+V);
+    float spec=pow(max(dot(N,Hd),0.0),24.0)*0.5;
+    float amb=0.35;
+    vec3 col=uColor*(amb+d*0.85)+vec3(spec);
+    col=mix(col,uColor,uEmit);
+    col+=uColor*uEmit*0.6;
+    // subtle fog to sky
+    float fog=clamp((length(vW.xz)-9.0)/14.0,0.0,0.55);
+    col=mix(col,vec3(0.04,0.05,0.10),fog);
+    gl_FragColor=vec4(col,1.0);
+  }`));
+gl.linkProgram(prog); gl.useProgram(prog);
+const A_pos=gl.getAttribLocation(prog,'aPos'), A_norm=gl.getAttribLocation(prog,'aNorm');
+const U={proj:gl.getUniformLocation(prog,'uProj'),view:gl.getUniformLocation(prog,'uView'),
+  model:gl.getUniformLocation(prog,'uModel'),norm:gl.getUniformLocation(prog,'uNormMat'),
+  color:gl.getUniformLocation(prog,'uColor'),emit:gl.getUniformLocation(prog,'uEmit'),
+  cam:gl.getUniformLocation(prog,'uCam')};
+gl.enable(gl.DEPTH_TEST);
+
+// --- geometry builders ---
+function buildMesh(verts,norms){
+  const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(verts),gl.STATIC_DRAW);
+  const nb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,nb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(norms),gl.STATIC_DRAW);
+  return {vb,nb,count:verts.length/3};
+}
+function cube(){
+  const f=[ // faces: pos(4)+normal
+    [[-1,-1,1,1,-1,1,1,1,1,-1,1,1],[0,0,1]],
+    [[1,-1,-1,-1,-1,-1,-1,1,-1,1,1,-1],[0,0,-1]],
+    [[-1,-1,-1,-1,-1,1,-1,1,1,-1,1,-1],[-1,0,0]],
+    [[1,-1,1,1,-1,-1,1,1,-1,1,1,1],[1,0,0]],
+    [[-1,1,1,1,1,1,1,1,-1,-1,1,-1],[0,1,0]],
+    [[-1,-1,-1,1,-1,-1,1,-1,1,-1,-1,1],[0,-1,0]],
+  ];
+  const V=[],N=[];
+  for(const[q,n]of f){
+    const p=[[q[0],q[1],q[2]],[q[3],q[4],q[5]],[q[6],q[7],q[8]],[q[9],q[10],q[11]]];
+    const tri=[0,1,2,0,2,3];
+    for(const i of tri){V.push(...p[i]);N.push(...n);}
+  }
+  return buildMesh(V,N);
+}
+function cyl(seg,rTop,rBot,h){
+  const V=[],N=[];const hy=h/2;
+  for(let i=0;i<seg;i++){
+    const a0=i/seg*Math.PI*2,a1=(i+1)/seg*Math.PI*2;
+    const c0=Math.cos(a0),s0=Math.sin(a0),c1=Math.cos(a1),s1=Math.sin(a1);
+    const pT0=[c0*rTop,hy,s0*rTop],pT1=[c1*rTop,hy,s1*rTop];
+    const pB0=[c0*rBot,-hy,s0*rBot],pB1=[c1*rBot,-hy,s1*rBot];
+    const nm=norm([Math.cos((a0+a1)/2),0.2,Math.sin((a0+a1)/2)]);
+    for(const p of[pB0,pB1,pT1, pB0,pT1,pT0]){V.push(...p);N.push(...nm);}
+    // caps
+    for(const p of[[0,hy,0],pT0,pT1]){V.push(...p);N.push(0,1,0);}
+    for(const p of[[0,-hy,0],pB1,pB0]){V.push(...p);N.push(0,-1,0);}
+  }
+  return buildMesh(V,N);
+}
+function sphere(seg){
+  const V=[],N=[];
+  for(let i=0;i<seg;i++)for(let j=0;j<seg;j++){
+    const t0=i/seg*Math.PI,t1=(i+1)/seg*Math.PI,p0=j/seg*2*Math.PI,p1=(j+1)/seg*2*Math.PI;
+    const P=(t,p)=>[Math.sin(t)*Math.cos(p),Math.cos(t),Math.sin(t)*Math.sin(p)];
+    const a=P(t0,p0),b=P(t1,p0),c=P(t1,p1),d=P(t0,p1);
+    for(const p of[a,b,c,a,c,d]){V.push(...p);N.push(...p);}
+  }
+  return buildMesh(V,N);
+}
+const MESH={cube:cube(),cyl:cyl(12,.6,1,1),cone:cyl(12,.05,1,1),sphere:sphere(10),oct:cyl(4,.02,1.2,1)};
+
+function draw(mesh,model,color,emit=0){
+  gl.uniformMatrix4fv(U.model,false,model);
+  gl.uniformMatrix4fv(U.norm,false,model); // uniform scale approx
+  gl.uniform3fv(U.color,color);
+  gl.uniform1f(U.emit,emit);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.vb);gl.enableVertexAttribArray(A_pos);gl.vertexAttribPointer(A_pos,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,mesh.nb);gl.enableVertexAttribArray(A_norm);gl.vertexAttribPointer(A_norm,3,gl.FLOAT,false,0,0);
+  gl.drawArrays(gl.TRIANGLES,0,mesh.count);
+}
+
+//========================================================================
+//  Game
+//========================================================================
+const GRID=6, CELL=1.6;                 // 6x6 board
+const halfB=(GRID-1)*CELL/2;
+function cellPos(gx,gz){return [gx*CELL-halfB, 0, gz*CELL-halfB];}
+
+// Enemy path: snake through the board columns
+const PATH=[];
+(function(){
+  for(let z=0;z<GRID;z++){
+    if(z%2===0) for(let x=0;x<GRID;x++) PATH.push(cellPos(x,z));
+    else for(let x=GRID-1;x>=0;x--) PATH.push(cellPos(x,z));
+  }
+})();
+
+// Tower tiers
+const TIER=[
+  {name:"Pip",   col:[.55,.75,1],  dmg:6,  rate:1.1, rng:2.6, mesh:'cyl'},
+  {name:"Bolt",  col:[.4,.95,.7],  dmg:12, rate:1.3, rng:2.9, mesh:'cyl'},
+  {name:"Spark", col:[1,.85,.35],  dmg:24, rate:1.5, rng:3.2, mesh:'oct'},
+  {name:"Blaze", col:[1,.5,.35],   dmg:48, rate:1.8, rng:3.5, mesh:'oct'},
+  {name:"Prism", col:[.8,.5,1],    dmg:95, rate:2.1, rng:3.9, mesh:'sphere'},
+  {name:"Nova",  col:[1,.35,.7],   dmg:190,rate:2.4, rng:4.3, mesh:'sphere'},
+  {name:"OMEGA", col:[1,1,1],      dmg:420,rate:3.0, rng:5.0, mesh:'sphere'},
+];
+
+let state, meta;
+function loadMeta(){
+  try{meta=JSON.parse(localStorage.getItem('mergekeep')||'null');}catch(e){}
+  if(!meta) meta={cores:0, up:{gold:0,dmg:0,hp:0,start:0}};
+}
+function saveMeta(){localStorage.setItem('mergekeep',JSON.stringify(meta));}
+
+const UPGRADES=[
+  {k:'gold', name:'Treasury',  desc:'+15% gold per level', cost:l=>4+l*3, max:6},
+  {k:'dmg',  name:'Sharpened', desc:'+8% tower damage per level', cost:l=>5+l*4, max:6},
+  {k:'hp',   name:'Bulwark',   desc:'+4 keep HP per level', cost:l=>4+l*3, max:6},
+  {k:'start',name:'Head Start',desc:'+15 starting gold per level', cost:l=>3+l*2, max:5},
+];
+
+function metaMul(k){return meta.up[k]||0;}
+
+function newState(){
+  const goldBonus = metaMul('start')*15;
+  return {
+    towers:[],        // {gx,gz,tier,cd,ang}
+    grid:{},          // "x,z"->tower
+    enemies:[],
+    shots:[],
+    parts:[],         // particles
+    hp: 20 + metaMul('hp')*4,
+    maxhp: 20 + metaMul('hp')*4,
+    gold: 30 + goldBonus,
+    wave:0, cores:0,
+    buyCost:10,
+    running:false, spawning:false, spawnQ:[], spawnT:0,
+    kills:0,
+    t:0,
+    choosing:false,
+    powers:{dmg:1, rate:1, gold:1, rng:1, chain:0, slow:0},
+  };
+}
+
+//----- camera -----
+let camAng=0.6, camPitch=0.95, camDist=14;
+function viewMat(){
+  const ex=Math.sin(camAng)*Math.cos(camPitch)*camDist;
+  const ey=Math.sin(camPitch)*camDist;
+  const ez=Math.cos(camAng)*Math.cos(camPitch)*camDist;
+  camEye=[ex,ey,ez];
+  return M4.lookAt(camEye,[0,0,0],[0,1,0]);
+}
+let camEye=[0,10,14];
+
+//----- picking: screen->ground cell -----
+let projM;
+function pickCell(sx,sy){
+  // ray from camera through screen point, intersect y=0 plane
+  const ndcX=(sx/W)*2-1, ndcY=1-(sy/H)*2;
+  const view=viewMat();
+  const inv=invMat(M4.mul(projM,view));
+  const near=applyVec(inv,[ndcX,ndcY,-1,1]);
+  const far=applyVec(inv,[ndcX,ndcY,1,1]);
+  const o=[near[0]/near[3],near[1]/near[3],near[2]/near[3]];
+  const f=[far[0]/far[3],far[1]/far[3],far[2]/far[3]];
+  const dir=norm(sub(f,o));
+  if(Math.abs(dir[1])<1e-4)return null;
+  const t=-o[1]/dir[1];
+  if(t<0)return null;
+  const wx=o[0]+dir[0]*t, wz=o[2]+dir[2]*t;
+  const gx=Math.round((wx+halfB)/CELL), gz=Math.round((wz+halfB)/CELL);
+  if(gx<0||gz<0||gx>=GRID||gz>=GRID)return null;
+  return {gx,gz};
+}
+function applyVec(m,v){return[
+  m[0]*v[0]+m[4]*v[1]+m[8]*v[2]+m[12]*v[3],
+  m[1]*v[0]+m[5]*v[1]+m[9]*v[2]+m[13]*v[3],
+  m[2]*v[0]+m[6]*v[1]+m[10]*v[2]+m[14]*v[3],
+  m[3]*v[0]+m[7]*v[1]+m[11]*v[2]+m[15]*v[3]];}
+function invMat(m){
+  const inv=new Array(16),a=m;
+  inv[0]=a[5]*a[10]*a[15]-a[5]*a[11]*a[14]-a[9]*a[6]*a[15]+a[9]*a[7]*a[14]+a[13]*a[6]*a[11]-a[13]*a[7]*a[10];
+  inv[4]=-a[4]*a[10]*a[15]+a[4]*a[11]*a[14]+a[8]*a[6]*a[15]-a[8]*a[7]*a[14]-a[12]*a[6]*a[11]+a[12]*a[7]*a[10];
+  inv[8]=a[4]*a[9]*a[15]-a[4]*a[11]*a[13]-a[8]*a[5]*a[15]+a[8]*a[7]*a[13]+a[12]*a[5]*a[11]-a[12]*a[7]*a[9];
+  inv[12]=-a[4]*a[9]*a[14]+a[4]*a[10]*a[13]+a[8]*a[5]*a[14]-a[8]*a[6]*a[13]-a[12]*a[5]*a[10]+a[12]*a[6]*a[9];
+  inv[1]=-a[1]*a[10]*a[15]+a[1]*a[11]*a[14]+a[9]*a[2]*a[15]-a[9]*a[3]*a[14]-a[13]*a[2]*a[11]+a[13]*a[3]*a[10];
+  inv[5]=a[0]*a[10]*a[15]-a[0]*a[11]*a[14]-a[8]*a[2]*a[15]+a[8]*a[3]*a[14]+a[12]*a[2]*a[11]-a[12]*a[3]*a[10];
+  inv[9]=-a[0]*a[9]*a[15]+a[0]*a[11]*a[13]+a[8]*a[1]*a[15]-a[8]*a[3]*a[13]-a[12]*a[1]*a[11]+a[12]*a[3]*a[9];
+  inv[13]=a[0]*a[9]*a[14]-a[0]*a[10]*a[13]-a[8]*a[1]*a[14]+a[8]*a[2]*a[13]+a[12]*a[1]*a[10]-a[12]*a[2]*a[9];
+  inv[2]=a[1]*a[6]*a[15]-a[1]*a[7]*a[14]-a[5]*a[2]*a[15]+a[5]*a[3]*a[14]+a[13]*a[2]*a[7]-a[13]*a[3]*a[6];
+  inv[6]=-a[0]*a[6]*a[15]+a[0]*a[7]*a[14]+a[4]*a[2]*a[15]-a[4]*a[3]*a[14]-a[12]*a[2]*a[7]+a[12]*a[3]*a[6];
+  inv[10]=a[0]*a[5]*a[15]-a[0]*a[7]*a[13]-a[4]*a[1]*a[15]+a[4]*a[3]*a[13]+a[12]*a[1]*a[7]-a[12]*a[3]*a[5];
+  inv[14]=-a[0]*a[5]*a[14]+a[0]*a[6]*a[13]+a[4]*a[1]*a[14]-a[4]*a[2]*a[13]-a[12]*a[1]*a[6]+a[12]*a[2]*a[5];
+  inv[3]=-a[1]*a[6]*a[11]+a[1]*a[7]*a[10]+a[5]*a[2]*a[11]-a[5]*a[3]*a[10]-a[9]*a[2]*a[7]+a[9]*a[3]*a[6];
+  inv[7]=a[0]*a[6]*a[11]-a[0]*a[7]*a[10]-a[4]*a[2]*a[11]+a[4]*a[3]*a[10]+a[8]*a[2]*a[7]-a[8]*a[3]*a[6];
+  inv[11]=-a[0]*a[5]*a[11]+a[0]*a[7]*a[9]+a[4]*a[1]*a[11]-a[4]*a[3]*a[9]-a[8]*a[1]*a[7]+a[8]*a[3]*a[5];
+  inv[15]=a[0]*a[5]*a[10]-a[0]*a[6]*a[9]-a[4]*a[1]*a[10]+a[4]*a[2]*a[9]+a[8]*a[1]*a[6]-a[8]*a[2]*a[5];
+  let det=a[0]*inv[0]+a[1]*inv[4]+a[2]*inv[8]+a[3]*inv[12];
+  det=1/det;for(let i=0;i<16;i++)inv[i]*=det;return inv;
+}
+
+//========================================================================
+//  Game logic object
+//========================================================================
+const $=id=>document.getElementById(id);
+const G={
+  start(){ $('startOverlay').classList.add('hidden'); state.t=0; },
+  reset(){
+    $('deadOverlay').classList.add('hidden');
+    state=newState(); syncHUD();
+  },
+  buyTower(){
+    if(state.towers.length>=GRID*GRID){toast("Board full — merge!");return;}
+    if(state.gold<state.buyCost){toast("Not enough gold");return;}
+    // find empty cell
+    let cell=null;
+    outer: for(let z=0;z<GRID;z++)for(let x=0;x<GRID;x++){if(!state.grid[x+","+z]){cell={gx:x,gz:z};break outer;}}
+    if(!cell){toast("Board full — merge!");return;}
+    state.gold-=state.buyCost;
+    state.buyCost=Math.ceil(state.buyCost*1.15);
+    addTower(cell.gx,cell.gz,0);
+    syncHUD();
+  },
+  startWave(){
+    if(state.spawning||state.choosing)return;
+    if(state.spawnQ.length===0) spawnWave();
+    // early call bonus
+    if(!state.running){ state.gold+=Math.floor(3+state.wave); toast("+"+Math.floor(3+state.wave)+"💰 early bonus"); }
+    state.running=true; state.spawning=true; syncHUD();
+  },
+};
+
+function addTower(gx,gz,tier){
+  const t={gx,gz,tier,cd:0,ang:0,pop:0};
+  state.towers.push(t); state.grid[gx+","+gz]=t; return t;
+}
+function removeTower(t){
+  state.towers.splice(state.towers.indexOf(t),1);
+  delete state.grid[t.gx+","+t.gz];
+}
+
+function spawnWave(){
+  state.wave++;
+  const n=5+Math.floor(state.wave*1.6);
+  const boss=state.wave%5===0;
+  const q=[];
+  for(let i=0;i<n;i++){
+    const hp=Math.floor((8+state.wave*state.wave*0.9+state.wave*4)*(1+i*0.02));
+    q.push({hp, boss:false});
+  }
+  if(boss) q.push({hp:Math.floor((8+state.wave*state.wave*0.9)*10), boss:true});
+  state.spawnQ=q; state.spawnT=0;
+}
+
+//----- powers (roguelike choices) -----
+const POWERS=[
+  {ic:'⚔️',ti:'Overclock',de:'+25% fire rate for all towers',fn:s=>s.powers.rate*=1.25},
+  {ic:'💥',ti:'Heavy Rounds',de:'+30% damage',fn:s=>s.powers.dmg*=1.3},
+  {ic:'📡',ti:'Long Barrel',de:'+20% range',fn:s=>s.powers.rng*=1.2},
+  {ic:'💰',ti:'Bounty',de:'+40% gold from kills',fn:s=>s.powers.gold*=1.4},
+  {ic:'🔗',ti:'Chain Shot',de:'shots pierce +1 enemy',fn:s=>s.powers.chain++},
+  {ic:'❤️',ti:'Repair',de:'restore 8 keep HP + max',fn:s=>{s.maxhp+=4;s.hp=Math.min(s.maxhp,s.hp+8);}},
+  {ic:'🎁',ti:'Windfall',de:'gain 40 gold now',fn:s=>s.gold+=40},
+  {ic:'🐌',ti:'Cryo Field',de:'enemies move 12% slower',fn:s=>s.powers.slow+=0.12},
+];
+function offerCards(){
+  state.choosing=true;
+  $('cardOverlay').classList.remove('hidden');
+  const pool=[...POWERS].sort(()=>Math.random()-0.5).slice(0,3);
+  const el=$('cards'); el.innerHTML='';
+  for(const p of pool){
+    const d=document.createElement('div');d.className='card';
+    d.innerHTML=`<div class="ic">${p.ic}</div><div class="ti">${p.ti}</div><div class="de">${p.de}</div>`;
+    d.onclick=()=>{p.fn(state);state.choosing=false;$('cardOverlay').classList.add('hidden');
+      state.gold+=Math.floor(8+state.wave*2); syncHUD();};
+    el.appendChild(d);
+  }
+}
+
+//----- combat & sim -----
+function update(dt){
+  state.t+=dt;
+  if(!state.running || state.choosing) { animTowers(dt); return; }
+
+  // spawn
+  if(state.spawning){
+    state.spawnT-=dt;
+    if(state.spawnT<=0 && state.spawnQ.length){
+      const e=state.spawnQ.shift();
+      state.enemies.push({p:0, hp:e.hp, maxhp:e.hp, boss:e.boss,
+        spd:(e.boss?0.55:1.0)*(1.0)*(1-state.powers.slow), x:0,y:0,z:0, wob:Math.random()*6});
+      state.spawnT=e.boss?0.6:0.42;
+      if(state.spawnQ.length===0) state.spawning=false;
+    }
+  }
+
+  // move enemies
+  const dmgMul=state.powers.dmg*(1+metaMul('dmg')*0.08);
+  for(const e of state.enemies){
+    e.p += e.spd*dt*1.1;
+    const idx=Math.floor(e.p);
+    if(idx>=PATH.length-1){
+      // reached keep
+      state.hp -= e.boss?5:1; e.dead=true;
+      spawnParts(0,0.5,0,[1,.3,.3],14);
+    } else {
+      const a=PATH[idx], b=PATH[idx+1], f=e.p-idx;
+      e.x=a[0]+(b[0]-a[0])*f; e.z=a[2]+(b[2]-a[2])*f;
+      e.y=0.5+Math.sin(state.t*4+e.wob)*0.06;
+    }
+  }
+
+  // towers fire
+  for(const t of state.towers){
+    t.cd-=dt;
+    const spec=TIER[t.tier];
+    const rng=spec.rng*state.powers.rng;
+    // find furthest-along enemy in range
+    let best=null,bp=-1;
+    const tp=cellPos(t.gx,t.gz);
+    for(const e of state.enemies){
+      if(e.dead)continue;
+      const d=Math.hypot(e.x-tp[0],e.z-tp[2]);
+      if(d<=rng && e.p>bp){best=e;bp=e.p;}
+    }
+    if(best){
+      t.ang=Math.atan2(best.x-tp[0],best.z-tp[2]);
+      if(t.cd<=0){
+        t.cd=1/(spec.rate*state.powers.rate);
+        t.pop=1;
+        state.shots.push({x:tp[0],y:0.9,z:tp[2],tx:best.x,tz:best.z,
+          dmg:spec.dmg*dmgMul, col:spec.col, pierce:state.powers.chain, life:0.5,
+          vx:0,vz:0, init:false, target:best});
+      }
+    }
+  }
+
+  // shots
+  for(const s of state.shots){
+    if(!s.init){const dx=s.tx-s.x,dz=s.tz-s.z,l=Math.hypot(dx,dz)||1;s.vx=dx/l*18;s.vz=dz/l*18;s.init=true;}
+    s.x+=s.vx*dt; s.z+=s.vz*dt; s.life-=dt;
+    // hit test
+    for(const e of state.enemies){
+      if(e.dead)continue;
+      if(Math.hypot(e.x-s.x,e.z-s.z)<0.45){
+        e.hp-=s.dmg; spawnParts(s.x,0.6,s.z,s.col,4);
+        if(s.pierce>0){s.pierce--;} else {s.dead=true;}
+        if(e.hp<=0){e.dead=true;}
+        break;
+      }
+    }
+    if(s.life<=0)s.dead=true;
+  }
+
+  // deaths & rewards
+  const goldMul=state.powers.gold*(1+metaMul('gold')*0.15);
+  for(const e of state.enemies){
+    if(e.dead && !e.counted && e.hp<=0){
+      e.counted=true; state.kills++;
+      const g=Math.floor((e.boss?25:3)*goldMul);
+      state.gold+=g; state.cores+= e.boss?1:0;
+      spawnParts(e.x,0.6,e.z,e.boss?[1,.8,.3]:[.6,.9,1],e.boss?24:8);
+    }
+  }
+  state.enemies=state.enemies.filter(e=>!e.dead);
+  state.shots=state.shots.filter(s=>!s.dead);
+
+  // particles
+  for(const p of state.parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.vy-=6*dt;p.life-=dt;}
+  state.parts=state.parts.filter(p=>p.life>0);
+
+  animTowers(dt);
+
+  // wave clear?
+  if(state.running && !state.spawning && state.enemies.length===0){
+    state.running=false;
+    state.gold+=Math.floor(6+state.wave*2);
+    syncHUD();
+    offerCards();
+  }
+
+  if(state.hp<=0 && !state.gameover){ gameOver(); }
+  syncHUD();
+}
+function animTowers(dt){ for(const t of state.towers){ if(t.pop>0)t.pop=Math.max(0,t.pop-dt*4);} }
+
+function spawnParts(x,y,z,col,n){
+  for(let i=0;i<n;i++)state.parts.push({x,y,z,
+    vx:(Math.random()-.5)*4,vy:Math.random()*4+1,vz:(Math.random()-.5)*4,
+    life:0.4+Math.random()*0.3,col});
+}
+
+function gameOver(){
+  state.gameover=true; state.running=false;
+  meta.cores += state.cores;
+  saveMeta();
+  $('deadStats').textContent=`You reached Wave ${state.wave} · ${state.kills} kills.`;
+  $('earnCores').textContent=state.cores;
+  buildUpgradeList();
+  $('deadOverlay').classList.remove('hidden');
+}
+function buildUpgradeList(){
+  const box=$('upgrades');box.innerHTML='';
+  for(const u of UPGRADES){
+    const lvl=meta.up[u.k]||0; const cost=u.cost(lvl); const maxed=lvl>=u.max;
+    const d=document.createElement('div');
+    d.className='btn'; d.style.pointerEvents='auto'; d.style.flex='none';
+    d.innerHTML=`<div class="t">${u.name} <span style="opacity:.6">Lv${lvl}/${u.max}</span></div>
+      <div class="c">${u.desc} · ${maxed?'MAX':'<b>'+cost+'</b>⭐'}</div>`;
+    if(maxed||meta.cores<cost)d.classList.add('dis');
+    d.onclick=()=>{const l=meta.up[u.k]||0;if(l>=u.max)return;const c=u.cost(l);if(meta.cores<c)return;
+      meta.cores-=c;meta.up[u.k]=l+1;saveMeta();buildUpgradeList();updateMetaLine();};
+    box.appendChild(d);
+  }
+}
+
+//----- HUD -----
+function syncHUD(){
+  $('hp').textContent=Math.max(0,Math.ceil(state.hp));
+  $('gold').textContent=state.gold;
+  $('wave').textContent=state.wave;
+  $('cores').textContent=state.cores;
+  $('buyCost').textContent=state.buyCost;
+  $('buyBtn').classList.toggle('dis',state.gold<state.buyCost);
+  $('waveHint').textContent=state.running?'in progress':'+bonus gold';
+}
+let toastT=0;
+function toast(msg){const t=$('toast');t.textContent=msg;t.style.opacity=1;toastT=1.6;}
+function updateMetaLine(){
+  $('metaLine').innerHTML = meta.cores>0? `You have <b>${meta.cores}</b> ⭐ Cores — spend them on the death screen to grow stronger each run.` : `Tip: bosses drop ⭐ Cores for permanent upgrades.`;
+}
+
+//========================================================================
+//  Input: drag to place/merge, rotate camera
+//========================================================================
+let drag=null; // {tower, gx, gz} being dragged, or null
+let ptr={down:false, sx:0, sy:0, moved:false, cam:false};
+function evtXY(e){const r=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[t.clientX-r.left,t.clientY-r.top];}
+
+cv.addEventListener('pointerdown',e=>{
+  const [x,y]=evtXY(e); ptr.down=true;ptr.sx=x;ptr.sy=y;ptr.moved=false;ptr.cam=false;
+  const c=pickCell(x,y);
+  if(c && state.grid[c.gx+","+c.gz]){ drag={tower:state.grid[c.gx+","+c.gz], ox:c.gx, oz:c.gz, x, y}; }
+  else { drag=null; ptr.cam=true; ptr.lastx=x; }
+});
+cv.addEventListener('pointermove',e=>{
+  if(!ptr.down)return;
+  const [x,y]=evtXY(e);
+  if(Math.hypot(x-ptr.sx,y-ptr.sy)>6)ptr.moved=true;
+  if(drag){ drag.x=x; drag.y=y; }
+  else if(ptr.cam){ camAng-=(x-ptr.lastx)*0.008; ptr.lastx=x;
+    camPitch=Math.max(0.5,Math.min(1.35,camPitch-(y-(ptr.lasty||y))*0.004)); ptr.lasty=y; }
+});
+window.addEventListener('pointerup',e=>{
+  if(drag && ptr.moved){
+    const c=pickCell(drag.x,drag.y);
+    if(c){
+      const targ=state.grid[c.gx+","+c.gz];
+      if(targ && targ!==drag.tower && targ.tier===drag.tower.tier && drag.tower.tier<TIER.length-1){
+        // MERGE
+        removeTower(drag.tower); targ.tier++; targ.pop=1;
+        spawnParts(...cellPos(targ.gx,targ.gz),TIER[targ.tier].col,16);
+        toast("⬆ Merged → "+TIER[targ.tier].name+"!");
+      } else if(!targ){
+        // move
+        delete state.grid[drag.tower.gx+","+drag.tower.gz];
+        drag.tower.gx=c.gx; drag.tower.gz=c.gz; state.grid[c.gx+","+c.gz]=drag.tower;
+      }
+    }
+    syncHUD();
+  }
+  ptr.down=false; ptr.lasty=undefined; drag=null;
+});
+
+//========================================================================
+//  Render
+//========================================================================
+function render(){
+  gl.clearColor(0.03,0.04,0.08,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  projM=M4.persp(1.0, W/H, 0.1, 100);
+  const view=viewMat();
+  gl.uniformMatrix4fv(U.proj,false,projM);
+  gl.uniformMatrix4fv(U.view,false,view);
+  gl.uniform3fv(U.cam,camEye);
+
+  // ground tiles + path
+  const pathSet=new Set(PATH.map(p=>Math.round((p[0]+halfB)/CELL)+","+Math.round((p[2]+halfB)/CELL)));
+  for(let z=0;z<GRID;z++)for(let x=0;x<GRID;x++){
+    const p=cellPos(x,z); const key=x+","+z;
+    const isPath=true; // whole board is walkable snake, tint by row for readability
+    const shade=((x+z)%2)?0.12:0.16;
+    let col=[shade,shade+0.02,shade+0.06];
+    // highlight drag target
+    if(drag){const c=pickCell(drag.x,drag.y); if(c&&c.gx===x&&c.gz===z){col=[0.3,0.4,0.7];}}
+    let m=M4.mul(M4.translate(p[0],-0.15,p[2]),M4.scale(CELL*0.46,0.12,CELL*0.46));
+    draw(MESH.cube,m,col,0.04);
+  }
+  // keep (goal) at path end
+  const endP=PATH[PATH.length-1];
+  let km=M4.mul(M4.mul(M4.translate(endP[0],0.4,endP[2]),M4.rotY(state.t)),M4.scale(0.4,0.6,0.4));
+  draw(MESH.oct,km,[1,.4,.5],0.5+0.3*Math.sin(state.t*3));
+
+  // towers
+  for(const t of state.towers){
+    const p=cellPos(t.gx,t.gz);
+    const spec=TIER[t.tier];
+    const isDrag=drag&&drag.tower===t;
+    let dx=p[0],dz=p[2],dy=0;
+    if(isDrag){const c=pickCell(drag.x,drag.y); if(c){dx=cellPos(c.gx,c.gz)[0];dz=cellPos(c.gx,c.gz)[2];} dy=0.4;}
+    const s=0.42+t.tier*0.04 + t.pop*0.15;
+    // base
+    draw(MESH.cyl, M4.mul(M4.translate(dx,0.12+dy,dz),M4.scale(s*0.9,0.14,s*0.9)),
+      [spec.col[0]*0.5,spec.col[1]*0.5,spec.col[2]*0.5],0.05);
+    // body (rotates to target)
+    let body=M4.mul(M4.mul(M4.translate(dx,0.42+dy,dz),M4.rotY(t.ang)),M4.scale(s,0.42+t.tier*0.05,s));
+    draw(MESH[spec.mesh]||MESH.cyl, body, spec.col, 0.15+t.pop*0.5);
+    // barrel tip glow
+    draw(MESH.sphere, M4.mul(M4.translate(dx,0.75+dy+t.tier*0.05,dz),M4.scale(0.13,0.13,0.13)), spec.col,0.8);
+  }
+
+  // enemies
+  for(const e of state.enemies){
+    const s=e.boss?0.55:0.32;
+    const hpf=e.hp/e.maxhp;
+    const col=e.boss?[1,.5,.2]:[1-hpf*0.5,0.3+hpf*0.3,0.4];
+    draw(MESH.sphere, M4.mul(M4.translate(e.x,e.y,e.z),M4.scale(s,s,s)), col,0.2);
+    // spikes
+    draw(MESH.oct, M4.mul(M4.mul(M4.translate(e.x,e.y,e.z),M4.rotY(state.t*2)),M4.scale(s*0.5,s*1.4,s*0.5)), col,0.3);
+  }
+
+  // shots
+  for(const s of state.shots){
+    draw(MESH.sphere, M4.mul(M4.translate(s.x,s.y,s.z),M4.scale(0.14,0.14,0.14)), s.col,0.9);
+  }
+  // particles
+  for(const p of state.parts){
+    draw(MESH.cube, M4.mul(M4.translate(p.x,p.y,p.z),M4.scale(0.06,0.06,0.06)), p.col, 0.7);
+  }
+}
+
+//========================================================================
+//  Loop
+//========================================================================
+let last=0;
+function frame(ts){
+  const dt=Math.min(0.05,(ts-last)/1000||0); last=ts;
+  camAng+=0.02*dt; // slow auto-rotate for life
+  if(toastT>0){toastT-=dt; if(toastT<=0)$('toast').style.opacity=0;}
+  if(state) update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+
+//----- boot -----
+loadMeta();
+resize();
+state=newState();
+syncHUD();
+updateMetaLine();
+requestAnimationFrame(frame);
+</script>

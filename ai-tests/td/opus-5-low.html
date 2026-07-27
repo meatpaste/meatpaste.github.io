@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>PRISM CONVERGENCE — merge tower defence</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#05060d;color:#dfe7ff;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;user-select:none;touch-action:none}
+canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lab{position:absolute;transform:translate(-50%,-50%);font-size:11px;font-weight:700;
+  text-shadow:0 0 6px #000,0 1px 2px #000;letter-spacing:.5px}
+#ui{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;
+  justify-content:space-between;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#top{pointer-events:none;padding:8px 10px;display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+.panel{background:rgba(10,14,28,.78);border:1px solid rgba(120,160,255,.22);border-radius:10px;
+  padding:7px 10px;backdrop-filter:blur(8px);box-shadow:0 6px 24px rgba(0,0,0,.5)}
+.stat{font-size:11px;line-height:1.5;white-space:nowrap}
+.stat b{font-size:14px;color:#fff}
+.gold{color:#ffd166}.life{color:#ff7a8a}.wv{color:#8be9fd}.core{color:#b8ff6b}
+#threat{max-width:46vw;font-size:10px;line-height:1.45}
+.bar{height:5px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:2px}
+.bar>i{display:block;height:100%;border-radius:3px}
+#bottom{pointer-events:none;padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+#sel{align-self:flex-start;font-size:11px;line-height:1.5;display:none}
+#actions{pointer-events:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+button{pointer-events:auto;font-family:inherit;font-size:12px;font-weight:700;color:#eaf1ff;
+  background:linear-gradient(180deg,#22305c,#141c38);border:1px solid rgba(140,180,255,.35);
+  border-radius:9px;padding:11px 13px;cursor:pointer;transition:.12s;letter-spacing:.4px}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.38;cursor:not-allowed}
+button.go{background:linear-gradient(180deg,#1f6b45,#124029);border-color:#4cd08a;color:#d6ffe9}
+button.warn{background:linear-gradient(180deg,#6b2740,#3d1526);border-color:#ff85a8}
+.small{font-size:10px;font-weight:400;opacity:.75;display:block;margin-top:2px;letter-spacing:0}
+#overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 40%,rgba(30,45,95,.72),rgba(3,5,12,.94));
+  pointer-events:auto;padding:16px;overflow-y:auto;z-index:5}
+#card{max-width:560px;width:100%;max-height:100%;overflow-y:auto}
+h1{font-size:24px;letter-spacing:3px;background:linear-gradient(90deg,#ff6b6b,#7ad7ff,#c08bff);
+  -webkit-background-clip:text;background-clip:text;color:transparent;text-align:center}
+h2{font-size:15px;letter-spacing:1.5px;margin-bottom:8px;color:#9fc4ff}
+p.sub{font-size:11px;opacity:.75;text-align:center;line-height:1.6;margin:6px 0 12px}
+.opts{display:grid;gap:8px;grid-template-columns:1fr}
+@media(min-width:520px){.opts{grid-template-columns:1fr 1fr 1fr}}
+.opt{pointer-events:auto;text-align:left;padding:12px;display:flex;flex-direction:column;gap:4px;
+  background:linear-gradient(180deg,#1b2444,#101736);border:1px solid rgba(140,180,255,.3);
+  border-radius:11px;cursor:pointer}
+.opt:hover{border-color:#8ad8ff;background:linear-gradient(180deg,#26325e,#141d42)}
+.opt .n{font-size:13px;font-weight:800;color:#ffe9a8}
+.opt .d{font-size:10.5px;line-height:1.5;opacity:.85;font-weight:400}
+.tag{font-size:9px;letter-spacing:1px;opacity:.7}
+.meta{display:grid;gap:6px;grid-template-columns:1fr 1fr;margin:10px 0}
+.mrow{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px}
+.mrow button{padding:6px 9px;font-size:11px}
+#toast{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:13px;font-weight:800;
+  letter-spacing:1px;opacity:0;transition:.3s;text-shadow:0 0 12px #000;pointer-events:none;text-align:center}
+.relics{display:flex;gap:4px;flex-wrap:wrap;max-width:60vw;margin-top:4px}
+.rl{font-size:9px;background:rgba(140,180,255,.14);border:1px solid rgba(140,180,255,.3);
+  border-radius:5px;padding:2px 5px}
+#hint{position:absolute;bottom:132px;left:50%;transform:translateX(-50%);font-size:10px;opacity:.45;
+  transition:opacity .6s;text-align:center;width:90%;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+<div id="ui">
+  <div id="top">
+    <div class="panel stat">
+      <div><span class="gold">◆</span> <b id="uGold">0</b> prisms &nbsp; <span class="life">♥</span> <b id="uLife">20</b></div>
+      <div><span class="wv">WAVE</span> <b id="uWave">0</b> &nbsp; <span class="core">DEPTH</span> <b id="uDepth">1</b></div>
+      <div style="opacity:.7">interest <b id="uInt">5%</b> · score <b id="uScore">0</b></div>
+      <div class="relics" id="uRelics"></div>
+    </div>
+    <div class="panel" id="threat"></div>
+  </div>
+  <div id="bottom">
+    <div class="panel stat" id="sel"></div>
+    <div id="actions"></div>
+  </div>
+</div>
+<div id="hint">drag = orbit · pinch/scroll = zoom · tap tower then tap another to MERGE</div>
+<div id="toast"></div>
+<div id="overlay"><div class="panel" id="card"></div></div>
+
+<script>
+"use strict";
+/* ============================ MATH ============================ */
+const M4={
+ id:()=>new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+ mul(a,b,o){o=o||new Float32Array(16);
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s;}
+  return o;},
+ persp(f,ar,n,fa){const t=1/Math.tan(f/2);return new Float32Array([t/ar,0,0,0, 0,t,0,0, 0,0,(fa+n)/(n-fa),-1, 0,0,2*fa*n/(n-fa),0]);},
+ look(e,c,u){let z=V.n(V.s(e,c)),x=V.n(V.c(u,z)),y=V.c(z,x);
+  return new Float32Array([x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+   -V.d(x,e),-V.d(y,e),-V.d(z,e),1]);},
+ trs(p,rot,s){const c=Math.cos(rot),si=Math.sin(rot);const sx=s[0],sy=s[1],sz=s[2];
+  return new Float32Array([c*sx,0,-si*sx,0, 0,sy,0,0, si*sz,0,c*sz,0, p[0],p[1],p[2],1]);},
+ inv(m){const o=new Float32Array(16),
+  a00=m[0],a01=m[1],a02=m[2],a03=m[3],a10=m[4],a11=m[5],a12=m[6],a13=m[7],
+  a20=m[8],a21=m[9],a22=m[10],a23=m[11],a30=m[12],a31=m[13],a32=m[14],a33=m[15],
+  b00=a00*a11-a01*a10,b01=a00*a12-a02*a10,b02=a00*a13-a03*a10,b03=a01*a12-a02*a11,
+  b04=a01*a13-a03*a11,b05=a02*a13-a03*a12,b06=a20*a31-a21*a30,b07=a20*a32-a22*a30,
+  b08=a20*a33-a23*a30,b09=a21*a32-a22*a31,b10=a21*a33-a23*a31,b11=a22*a33-a23*a32;
+  let d=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06; if(!d)return o; d=1/d;
+  o[0]=(a11*b11-a12*b10+a13*b09)*d;o[1]=(a02*b10-a01*b11-a03*b09)*d;o[2]=(a31*b05-a32*b04+a33*b03)*d;
+  o[3]=(a22*b04-a21*b05-a23*b03)*d;o[4]=(a12*b08-a10*b11-a13*b07)*d;o[5]=(a00*b11-a02*b08+a03*b07)*d;
+  o[6]=(a32*b02-a30*b05-a33*b01)*d;o[7]=(a20*b05-a22*b02+a23*b01)*d;o[8]=(a10*b10-a11*b08+a13*b06)*d;
+  o[9]=(a01*b08-a00*b10-a03*b06)*d;o[10]=(a30*b04-a31*b02+a33*b00)*d;o[11]=(a21*b02-a20*b04-a23*b00)*d;
+  o[12]=(a11*b07-a10*b09-a12*b06)*d;o[13]=(a00*b09-a01*b07+a02*b06)*d;o[14]=(a31*b01-a30*b03-a32*b00)*d;
+  o[15]=(a20*b03-a21*b01+a22*b00)*d; return o;}
+};
+const V={s:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+ c:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+ d:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+ n(a){const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];}};
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t, rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[(Math.random()*a.length)|0];
+
+/* ============================ GL SETUP ============================ */
+const cv=document.getElementById('c');
+const gl=cv.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
+if(!gl){document.body.innerHTML='<p style="padding:20px">WebGL is required to play.</p>';throw 0;}
+function sh(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);
+ if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(s));return s;}
+const prog=gl.createProgram();
+gl.attachShader(prog,sh(gl.VERTEX_SHADER,`
+ attribute vec3 aPos; attribute vec3 aNrm;
+ uniform mat4 uVP, uM; varying vec3 vN, vW;
+ void main(){ vec4 w=uM*vec4(aPos,1.0); vW=w.xyz;
+  vN=normalize(mat3(uM[0].xyz,uM[1].xyz,uM[2].xyz)*aNrm);
+  gl_Position=uVP*w; }`));
+gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,`
+ precision mediump float; varying vec3 vN,vW;
+ uniform vec3 uCol,uEye; uniform float uEmis,uAlpha;
+ void main(){
+  vec3 n=normalize(vN);
+  vec3 L1=normalize(vec3(0.5,1.0,0.35)), L2=normalize(vec3(-0.6,0.35,-0.7));
+  float d=max(dot(n,L1),0.0)*0.95 + max(dot(n,L2),0.0)*0.3;
+  vec3 vd=normalize(uEye-vW);
+  float spec=pow(max(dot(reflect(-L1,n),vd),0.0),24.0)*0.5;
+  float rim=pow(1.0-max(dot(n,vd),0.0),3.0);
+  vec3 col=uCol*(0.22+d)+vec3(spec)+uCol*rim*0.9+uCol*uEmis;
+  float fog=clamp((length(uEye-vW)-14.0)/26.0,0.0,0.75);
+  col=mix(col,vec3(0.03,0.04,0.09),fog);
+  gl_FragColor=vec4(col,uAlpha); }`));
+gl.bindAttribLocation(prog,0,'aPos');gl.bindAttribLocation(prog,1,'aNrm');
+gl.linkProgram(prog);gl.useProgram(prog);
+const U={vp:gl.getUniformLocation(prog,'uVP'),m:gl.getUniformLocation(prog,'uM'),
+ col:gl.getUniformLocation(prog,'uCol'),eye:gl.getUniformLocation(prog,'uEye'),
+ em:gl.getUniformLocation(prog,'uEmis'),al:gl.getUniformLocation(prog,'uAlpha')};
+gl.enableVertexAttribArray(0);gl.enableVertexAttribArray(1);
+gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+
+/* ---------- geometry ---------- */
+function mesh(v,i){const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);
+ gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.STATIC_DRAW);
+ const e=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,e);
+ gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(i),gl.STATIC_DRAW);
+ return {b,e,n:i.length};}
+function boxGeo(){const v=[],i=[];
+ const f=[[[0,0,1],[-1,-1,1,1,-1,1,1,1,1,-1,1,1]],[[0,0,-1],[1,-1,-1,-1,-1,-1,-1,1,-1,1,1,-1]],
+  [[1,0,0],[1,-1,1,1,-1,-1,1,1,-1,1,1,1]],[[-1,0,0],[-1,-1,-1,-1,-1,1,-1,1,1,-1,1,-1]],
+  [[0,1,0],[-1,1,1,1,1,1,1,1,-1,-1,1,-1]],[[0,-1,0],[-1,-1,-1,1,-1,-1,1,-1,1,-1,-1,1]]];
+ f.forEach((fc,k)=>{for(let q=0;q<4;q++)v.push(fc[1][q*3]*.5,fc[1][q*3+1]*.5,fc[1][q*3+2]*.5,...fc[0]);
+  const o=k*4;i.push(o,o+1,o+2,o,o+2,o+3);});
+ return mesh(v,i);}
+function cylGeo(seg,r2){const v=[],i=[];r2=r2===undefined?1:r2;
+ for(let s=0;s<seg;s++){const a=s/seg*Math.PI*2,b=(s+1)/seg*Math.PI*2;
+  const ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);
+  const o=v.length/6;
+  v.push(ca*.5,-.5,sa*.5,ca,0,sa, cb*.5,-.5,sb*.5,cb,0,sb,
+         cb*.5*r2,.5,sb*.5*r2,cb,.3,sb, ca*.5*r2,.5,sa*.5*r2,ca,.3,sa);
+  i.push(o,o+1,o+2,o,o+2,o+3);
+  const t=v.length/6;
+  v.push(0,.5,0,0,1,0, ca*.5*r2,.5,sa*.5*r2,0,1,0, cb*.5*r2,.5,sb*.5*r2,0,1,0);
+  i.push(t,t+1,t+2);
+  const u=v.length/6;
+  v.push(0,-.5,0,0,-1,0, cb*.5,-.5,sb*.5,0,-1,0, ca*.5,-.5,sa*.5,0,-1,0);
+  i.push(u,u+1,u+2);}
+ return mesh(v,i);}
+function sphGeo(sg,rg){const v=[],i=[];
+ for(let y=0;y<=rg;y++)for(let x=0;x<=sg;x++){
+  const u=x/sg*Math.PI*2,p=y/rg*Math.PI;
+  const nx=Math.sin(p)*Math.cos(u),ny=Math.cos(p),nz=Math.sin(p)*Math.sin(u);
+  v.push(nx*.5,ny*.5,nz*.5,nx,ny,nz);}
+ for(let y=0;y<rg;y++)for(let x=0;x<sg;x++){const a=y*(sg+1)+x,b=a+sg+1;
+  i.push(a,b,a+1, a+1,b,b+1);}
+ return mesh(v,i);}
+const G={box:boxGeo(),cyl:cylGeo(10),cone:cylGeo(8,0.02),sph:sphGeo(12,8),oct:sphGeo(4,3)};
+let curGeo=null;
+function draw(geo,pos,rot,scl,col,emis,alpha){
+ if(curGeo!==geo){gl.bindBuffer(gl.ARRAY_BUFFER,geo.b);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,geo.e);
+  gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);curGeo=geo;}
+ gl.uniformMatrix4fv(U.m,false,M4.trs(pos,rot||0,scl));
+ gl.uniform3fv(U.col,col);gl.uniform1f(U.em,emis||0);gl.uniform1f(U.al,alpha===undefined?1:alpha);
+ gl.drawElements(gl.TRIANGLES,geo.n,gl.UNSIGNED_SHORT,0);}
+const hex=h=>[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255];
+
+/* ============================ GAME DATA ============================ */
+const GRID=9, CS=1.0, HALF=(GRID-1)/2;
+const cellPos=(c,r,y)=>[(c-HALF)*CS,y||0,(r-HALF)*CS];
+
+const ELE=[
+ {id:0,name:'EMBER',col:hex('#ff6b3d'),dmg:11,rate:1.05,range:2.4,desc:'burns targets over time'},
+ {id:1,name:'FROST',col:hex('#54d2ff'),dmg:7,rate:1.45,range:2.7,desc:'chills — slows movement'},
+ {id:2,name:'VOLT', col:hex('#c07bff'),dmg:9,rate:0.85,range:3.1,desc:'arcs to nearby foes'}];
+
+const WAYPOINTS=[[0,1],[6,1],[6,3],[1,3],[1,5],[7,5],[7,7],[9,7]];
+const PATH=[];(function(){for(let i=0;i<WAYPOINTS.length-1;i++){
+ const [c0,r0]=WAYPOINTS[i],[c1,r1]=WAYPOINTS[i+1];
+ const dc=Math.sign(c1-c0),dr=Math.sign(r1-r0);
+ let c=c0,r=r0; while(c!==c1||r!==r1){PATH.push([c,r]);c+=dc;r+=dr;}}
+ PATH.push(WAYPOINTS[WAYPOINTS.length-1]);})();
+const PATHSET=new Set(PATH.map(p=>p[0]+','+p[1]));
+const isPath=(c,r)=>PATHSET.has(c+','+r);
+const inGrid=(c,r)=>c>=0&&r>=0&&c<GRID&&r<GRID;
+
+const RELICS=[
+ {n:'Kindling',   d:'+25% EMBER damage',      f:s=>s.eleDmg[0]+=.25},
+ {n:'Permafrost', d:'+25% FROST damage & +10% slow',f:s=>{s.eleDmg[1]+=.25;s.slowBonus+=.10;}},
+ {n:'Overcharge', d:'+25% VOLT damage, +1 arc',f:s=>{s.eleDmg[2]+=.25;s.chain+=1;}},
+ {n:'Lens Array', d:'+18% range, all towers',  f:s=>s.range+=.18},
+ {n:'Hair Trigger',d:'+20% fire rate',         f:s=>s.rate+=.20},
+ {n:'Compound Vault',d:'+4% interest per wave',f:s=>s.interest+=.04},
+ {n:'Salvage Rig',d:'+35% prisms from kills',  f:s=>s.gain+=.35},
+ {n:'Fusion Coil',d:'merges cost nothing & give +8% damage each (stacking)',f:s=>s.fusion+=.08},
+ {n:'Twin Spark', d:'recruits sometimes arrive at tier 2',f:s=>s.luck+=.22},
+ {n:'Bulwark',    d:'+5 hull integrity',       f:s=>{s.lives+=5;}},
+ {n:'Prism Cut',  d:'+15% damage vs resistant foes',f:s=>s.pierce+=.15},
+ {n:'Focus Ring', d:'towers deal +40% to the wave leader',f:s=>s.leader+=.40},
+ {n:'Static Field',d:'enemies take 3 dmg/s while in any tower range',f:s=>s.aura+=3},
+ {n:'Deep Well',  d:'+60 prisms now, +2 per wave',f:s=>{s.gold+=60;s.income+=2;}},
+ {n:'Echo Merge', d:'tier 4+ merges spawn a free tier-1 tower',f:s=>s.echo=true},
+ {n:'Crit Matrix',d:'12% chance for triple damage',f:s=>s.crit+=.12},
+ {n:'Adaptive Optics',d:'ignore 30% of enemy resistance',f:s=>s.adapt+=.30},
+ {n:'Harmonics',  d:'+10% damage for each distinct element you field',f:s=>s.harmony+=.10}];
+
+const GAMBITS=[
+ {n:'SWARM',   d:'+70% enemy count',      r:'+90% prisms this wave', a:m=>{m.count*=1.7;m.gold*=1.9;}},
+ {n:'HASTE',   d:'enemies move 45% faster',r:'+70% prisms this wave', a:m=>{m.speed*=1.45;m.gold*=1.7;}},
+ {n:'ARMOUR',  d:'+80% enemy health',     r:'guaranteed extra relic', a:m=>{m.hp*=1.8;m.relic+=1;}},
+ {n:'VOID',    d:'enemies resist ALL elements 30%',r:'+120% prisms',  a:m=>{m.allres=.3;m.gold*=2.2;}},
+ {n:'FRACTURE',d:'lose 3 hull integrity now',r:'2 extra relics',      a:m=>{m.hullCost=3;m.relic+=2;}}];
+
+/* ============================ STATE ============================ */
+const SAVE='prismConvergence.v1';
+let meta=loadMeta();
+function loadMeta(){try{const m=JSON.parse(localStorage.getItem(SAVE));if(m&&m.cores!==undefined)return m;}catch(e){}
+ return {cores:0,depth:1,best:0,runs:0,up:{gold:0,life:0,int:0,luck:0,dmg:0}};}
+function saveMeta(){try{localStorage.setItem(SAVE,JSON.stringify(meta));}catch(e){}}
+const UPG=[
+ {k:'gold',n:'Seed Capital',d:'+30 starting prisms',cost:l=>3+l*3,max:8},
+ {k:'life',n:'Reinforced Hull',d:'+3 starting integrity',cost:l=>4+l*4,max:6},
+ {k:'int', n:'Interest Charter',d:'+2% wave interest',cost:l=>5+l*5,max:6},
+ {k:'luck',n:'Refined Recruits',d:'+8% chance of tier-2 recruits',cost:l=>4+l*4,max:5},
+ {k:'dmg', n:'Core Amplifier',d:'+6% all tower damage',cost:l=>6+l*6,max:8}];
+
+let S=null, phase='menu', overlayMode=null;
+function newRun(){
+ const u=meta.up, dep=meta.depth;
+ S={ gold:150+u.gold*30, lives:20+u.life*3, wave:0, score:0, depth:dep,
+  towers:new Map(), enemies:[], shots:[], fx:[], sel:null, recruits:0,
+  eleDmg:[0,0,0], range:0, rate:0, interest:.05+u.int*.02, gain:0, fusion:0, luck:u.luck*.08,
+  slowBonus:0, chain:0, pierce:0, leader:0, aura:0, income:0, crit:0, adapt:0, harmony:0,
+  echo:false, base:u.dmg*.06, relics:[], mods:null, dmgLog:[0,0,0], threat:[.34,.33,.33],
+  spawnQ:[], spawnT:0, waveGold:0, kills:0, leaders:0 };
+ phase='build'; overlayMode=null; hideOverlay(); toast('DEPTH '+dep+' — hold the line','#8be9fd');
+ for(let i=0;i<3;i++)recruit(true);
+ refresh(); rollThreat();
+}
+
+/* ============================ CAMERA ============================ */
+const cam={yaw:0.62,pitch:0.98,dist:16,tx:0,ty:-0.9,tz:0};
+let VP=M4.id(),eye=[0,0,0];
+function updCam(){
+ const cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);
+ eye=[cam.tx+Math.sin(cam.yaw)*cp*cam.dist, cam.ty+sp*cam.dist, cam.tz+Math.cos(cam.yaw)*cp*cam.dist];
+ const P=M4.persp(0.85,cv.width/cv.height,0.1,80);
+ VP=M4.mul(P,M4.look(eye,[cam.tx,cam.ty,cam.tz],[0,1,0]));
+}
+function resize(){const d=Math.min(devicePixelRatio||1,2);
+ cv.width=innerWidth*d;cv.height=innerHeight*d;gl.viewport(0,0,cv.width,cv.height);
+ cam.dist=clamp(innerWidth<560?22.5:16.5,8,30);}
+addEventListener('resize',resize);resize();
+
+/* pointer input */
+let ptrs=new Map(),dragged=false,lastPinch=0,downT=0;
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);
+ ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});dragged=false;downT=performance.now();lastPinch=0;});
+cv.addEventListener('pointermove',e=>{const p=ptrs.get(e.pointerId);if(!p)return;
+ const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;
+ if(ptrs.size>=2){const a=[...ptrs.values()];const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+  if(lastPinch)cam.dist=clamp(cam.dist*(lastPinch/d),7,26);lastPinch=d;dragged=true;return;}
+ if(Math.abs(dx)+Math.abs(dy)>3)dragged=true;
+ cam.yaw-=dx*0.007; cam.pitch=clamp(cam.pitch+dy*0.006,0.28,1.45);});
+cv.addEventListener('pointerup',e=>{ptrs.delete(e.pointerId);lastPinch=0;
+ if(!dragged&&performance.now()-downT<500)tap(e.clientX,e.clientY);});
+cv.addEventListener('pointercancel',e=>ptrs.delete(e.pointerId));
+cv.addEventListener('wheel',e=>{e.preventDefault();cam.dist=clamp(cam.dist*(1+Math.sign(e.deltaY)*0.12),7,26);},{passive:false});
+
+function pickCell(sx,sy){
+ const nx=(sx/innerWidth)*2-1, ny=1-(sy/innerHeight)*2;
+ const iv=M4.inv(VP);
+ const un=(x,y,z)=>{const w=iv[3]*x+iv[7]*y+iv[11]*z+iv[15];
+  return [(iv[0]*x+iv[4]*y+iv[8]*z+iv[12])/w,(iv[1]*x+iv[5]*y+iv[9]*z+iv[13])/w,(iv[2]*x+iv[6]*y+iv[10]*z+iv[14])/w];};
+ const a=un(nx,ny,-1),b=un(nx,ny,1);
+ const d=V.s(b,a); if(Math.abs(d[1])<1e-6)return null;
+ const t=(0.25-a[1])/d[1]; if(t<0)return null;
+ const wx=a[0]+d[0]*t, wz=a[2]+d[2]*t;
+ const c=Math.round(wx/CS+HALF), r=Math.round(wz/CS+HALF);
+ return inGrid(c,r)?[c,r]:null;}
+
+/* ============================ TOWERS ============================ */
+const key=(c,r)=>c+','+r;
+function towerStats(t){
+ const e=ELE[t.e], tm=Math.pow(2.15,t.tier-1);
+ const fus=1+S.fusion*t.merges, glob=1+S.base+S.eleDmg[t.e]+S.harmony*distinctElements();
+ return {dmg:e.dmg*tm*fus*glob, rate:e.rate*Math.pow(1.05,t.tier-1)*(1+S.rate),
+  range:(e.range+0.12*(t.tier-1))*(1+S.range)};}
+function distinctElements(){const s=new Set();S.towers.forEach(t=>s.add(t.e));return s.size;}
+function emptyCells(){const o=[];for(let c=0;c<GRID;c++)for(let r=0;r<GRID;r++)
+ if(!isPath(c,r)&&!S.towers.has(key(c,r)))o.push([c,r]);return o;}
+function recruitCost(){return Math.round(18*Math.pow(1.115,S.recruits));}
+function recruit(force){
+ const cost=force?0:recruitCost(); if(!force&&S.gold<cost)return toast('not enough prisms','#ff7a8a');
+ const cells=emptyCells(); if(!cells.length)return toast('no space — merge some towers','#ff7a8a');
+ if(!force){S.gold-=cost;S.recruits++;}
+ const [c,r]=pick(cells);
+ const tier=(!force&&Math.random()<S.luck)?2:1;
+ S.towers.set(key(c,r),{c,r,e:(Math.random()*3)|0,tier,merges:0,cd:0,rot:Math.random()*6.28,pop:0});
+ blip(420,0.05); refresh();}
+function merge(a,b){
+ b.tier++; b.merges=Math.max(a.merges,b.merges)+1; b.pop=1;
+ S.towers.delete(key(a.c,a.r)); S.sel=null;
+ S.score+=b.tier*25; blip(660,0.09);
+ for(let i=0;i<14;i++)S.fx.push({p:cellPos(b.c,b.r,.6),v:[rnd(-2,2),rnd(1,4),rnd(-2,2)],l:.6,m:.6,col:ELE[b.e].col});
+ if(S.echo&&b.tier>=4)recruit(true);
+ if(b.tier===6){toast('TIER 6 — RELIC FORGED','#ffd166');offerRelics(1);}
+ else toast('MERGE → TIER '+b.tier,'#b8ff6b');
+ refresh();}
+function sell(t){const v=Math.round(14*Math.pow(2.0,t.tier-1));
+ S.gold+=v;S.towers.delete(key(t.c,t.r));S.sel=null;toast('+'+v+' prisms','#ffd166');refresh();}
+
+function tap(sx,sy){
+ if(phase==='menu')return;
+ const cell=pickCell(sx,sy); if(!cell){S.sel=null;refresh();return;}
+ const [c,r]=cell, k=key(c,r), t=S.towers.get(k);
+ if(S.sel){
+  const a=S.towers.get(key(S.sel[0],S.sel[1]));
+  if(!a){S.sel=null;}
+  else if(t&&t!==a){
+   if(t.e===a.e&&t.tier===a.tier&&t.tier<10){merge(a,t);return;}
+   const ac=a.c,ar=a.r; S.towers.delete(key(a.c,a.r));S.towers.delete(k);
+   a.c=t.c;a.r=t.r;t.c=ac;t.r=ar; S.towers.set(key(a.c,a.r),a);S.towers.set(key(t.c,t.r),t);
+   S.sel=[a.c,a.r]; blip(300,0.04); refresh(); return;
+  } else if(!t&&!isPath(c,r)){
+   S.towers.delete(key(a.c,a.r)); a.c=c;a.r=r; S.towers.set(k,a); S.sel=[c,r]; blip(300,0.04); refresh(); return;
+  } else { S.sel=t?[c,r]:null; refresh(); return; }
+ }
+ S.sel=t?[c,r]:null; blip(240,0.03); refresh();
+ const h=$('hint'); if(h)h.style.opacity=0;
+}
+
+/* ============================ WAVES / GAME THEORY ============================ */
+/* The swarm ADAPTS: resistances are drawn toward whichever element dealt the most
+   damage last wave. Pure strategies get punished; a mixed field is the equilibrium. */
+function rollThreat(){
+ const tot=S.dmgLog[0]+S.dmgLog[1]+S.dmgLog[2];
+ let w=tot>0?S.dmgLog.map(d=>d/tot):[1/3,1/3,1/3];
+ const k=0.55; // adaptation strength
+ S.threat=w.map(x=>(1-k)/3+k*x);
+ const s=S.threat.reduce((a,b)=>a+b,0); S.threat=S.threat.map(x=>x/s);
+}
+function waveMods(gambit){
+ const m={count:1,speed:1,hp:1,gold:1,relic:0,allres:0,hullCost:0,name:gambit?gambit.n:'SAFE'};
+ if(gambit)gambit.a(m); return m;}
+function startWave(gambit){
+ S.wave++; S.pendingGambit=null; S.mods=waveMods(gambit); S.dmgLog=[0,0,0]; S.waveGold=0;
+ if(S.mods.hullCost){S.lives-=S.mods.hullCost;}
+ const w=S.wave, dep=S.depth;
+ const base=Math.floor((5+w*1.3)*S.mods.count);
+ const hp=20*Math.pow(1.235,w)*Math.pow(1.35,dep-1)*S.mods.hp;
+ const spd=(0.85+w*0.012)*S.mods.speed;
+ S.spawnQ=[];
+ const boss=w%5===0;
+ for(let i=0;i<base;i++){
+  let e=0,x=Math.random(),acc=0; for(let j=0;j<3;j++){acc+=S.threat[j];if(x<acc){e=j;break;}}
+  S.spawnQ.push({hp:hp*(0.85+Math.random()*0.3),spd:spd*rnd(0.92,1.08),res:e,boss:false});}
+ if(boss)S.spawnQ.push({hp:hp*10,spd:spd*0.55,res:(Math.random()*3)|0,boss:true});
+ S.spawnT=0; phase='combat'; S.sel=null; refresh();
+ if(S.wave>=2)$('hint').style.opacity=0;
+ toast('WAVE '+w+(boss?' — TITAN INBOUND':'')+' · '+S.mods.name,boss?'#ff7a8a':'#8be9fd');
+}
+function endWave(){
+ phase='build';
+ const inc=Math.round(S.gold*S.interest)+S.income;
+ S.gold+=inc; S.score+=S.wave*40+S.kills*3;
+ rollThreat();
+ const relics=1+(S.mods?S.mods.relic:0)+(S.wave%5===0?1:0);
+ toast('WAVE CLEAR · +'+inc+' interest','#b8ff6b'); blip(520,0.12);
+ setTimeout(()=>offerRelics(relics),450);
+ refresh();
+}
+function offerRelics(n){
+ if(n<=0){offerGambit();return;}
+ const pool=RELICS.slice().sort(()=>Math.random()-0.5).slice(0,3);
+ showOverlay(`<h2>RELIC ${n>1?'('+n+' left)':''}</h2>
+  <p class="sub">the swarm learns from you — so should you</p>
+  <div class="opts">${pool.map((r,i)=>`<button class="opt" data-r="${i}">
+   <span class="n">${r.n}</span><span class="d">${r.d}</span></button>`).join('')}</div>`,
+  el=>{el.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{
+   const r=pool[+b.dataset.r]; r.f(S); S.relics.push(r.n); blip(700,0.07); refresh(); offerRelics(n-1);});});
+}
+function offerGambit(){
+ const g=RELICS&&GAMBITS.slice().sort(()=>Math.random()-0.5).slice(0,2);
+ showOverlay(`<h2>GAMBIT — WAVE ${S.wave+1}</h2>
+  <p class="sub">next swarm reads as <b style="color:#ff6b3d">${(S.threat[0]*100)|0}% ember-resistant</b> ·
+   <b style="color:#54d2ff">${(S.threat[1]*100)|0}% frost</b> ·
+   <b style="color:#c07bff">${(S.threat[2]*100)|0}% volt</b><br>
+   prisms held earn <b>${(S.interest*100).toFixed(0)}%</b> interest each wave you survive — spend or compound?</p>
+  <div class="opts">
+   ${g.map((x,i)=>`<button class="opt" data-g="${i}"><span class="tag">GAMBIT</span>
+    <span class="n">${x.n}</span><span class="d">${x.d}<br><b style="color:#b8ff6b">${x.r}</b></span></button>`).join('')}
+   <button class="opt" data-g="-1"><span class="tag">DECLINE</span>
+    <span class="n">SAFE RUN</span><span class="d">no modifiers, no bonus. build, merge, compound.</span></button>
+  </div>`,
+  el=>{el.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{
+   const i=+b.dataset.g; hideOverlay(); S.pendingGambit=i>=0?g[i]:null; refresh();});});
+}
+function gameOver(){
+ phase='menu';
+ const cores=Math.floor(S.score/220)+S.wave*2+(S.depth-1)*5;
+ meta.cores+=cores; meta.runs++; meta.best=Math.max(meta.best,S.score);
+ const asc=S.wave>=20; if(asc)meta.depth=Math.max(meta.depth,S.depth+1);
+ saveMeta(); blip(140,0.4);
+ showOverlay(`<h1>RUN ENDED</h1>
+  <p class="sub">wave <b>${S.wave}</b> · score <b>${S.score}</b> · ${S.kills} kills
+  ${asc?'<br><b style="color:#b8ff6b">CONVERGENCE REACHED — DEPTH '+meta.depth+' UNLOCKED (enemies +35% hp, all rewards scale)</b>':''}
+  <br>salvaged <b class="core">${cores} cores</b></p>`+metaHTML(),bindMeta);
+}
+
+/* ============================ COMBAT ============================ */
+function spawnPos(i){const p=PATH[0];return cellPos(p[0],p[1],.35);}
+function enemyPos(e){
+ const i=Math.floor(e.t), f=e.t-i;
+ const a=PATH[clamp(i,0,PATH.length-1)], b=PATH[clamp(i+1,0,PATH.length-1)];
+ return [lerp((a[0]-HALF)*CS,(b[0]-HALF)*CS,f), .38+Math.sin(e.bob)*0.05, lerp((a[1]-HALF)*CS,(b[1]-HALF)*CS,f)];}
+function damage(en,amt,ele,src){
+ let mult=1;
+ if(ele!==undefined){
+  const res=en.res, weak=(res+1)%3;
+  if(ele===res)mult=lerp(0.45,1,S.adapt)+S.pierce;
+  else if(ele===weak)mult=1.55;
+  if(S.mods&&S.mods.allres)mult*=(1-S.mods.allres);
+  if(S.crit&&Math.random()<S.crit)mult*=3;
+  if(S.leader&&en===S.enemies[0])mult*=(1+S.leader);
+  S.dmgLog[ele]+=amt*mult;
+ }
+ en.hp-=amt*mult; en.flash=0.12;
+ if(en.hp<=0&&!en.dead){
+  en.dead=true; S.kills++;
+  const g=Math.round((2+S.wave*0.7)*(en.boss?18:1)*(1+S.gain)*(S.mods?S.mods.gold:1));
+  S.gold+=g; S.score+=en.boss?200:12;
+  for(let i=0;i<(en.boss?26:8);i++)S.fx.push({p:enemyPos(en),v:[rnd(-3,3),rnd(0,5),rnd(-3,3)],l:.5,m:.5,col:ELE[en.res].col});
+  blip(en.boss?200:800,en.boss?0.2:0.03);
+ }}
+function step(dt){
+ if(phase!=='combat')return;
+ // spawn
+ S.spawnT-=dt;
+ if(S.spawnQ.length&&S.spawnT<=0){
+  const d=S.spawnQ.shift();
+  S.enemies.push({t:0,hp:d.hp,max:d.hp,spd:d.spd,res:d.res,boss:d.boss,slow:0,burn:0,bob:Math.random()*6,flash:0,dead:false});
+  S.spawnT=d.boss?1.2:clamp(0.62-S.wave*0.012,0.22,0.7);}
+ // enemies
+ for(const en of S.enemies){
+  if(en.dead)continue;
+  en.bob+=dt*6;
+  if(en.burn>0){en.burn-=dt;damage(en,en.burnDps*dt,undefined);}
+  if(en.flash>0)en.flash-=dt;
+  const sl=en.slow>0?(1-clamp(0.35+S.slowBonus,0,0.8)):1;
+  if(en.slow>0)en.slow-=dt;
+  en.t+=en.spd*sl*dt;
+  if(en.t>=PATH.length-1){
+   en.dead=true; S.lives-=en.boss?5:1; blip(120,0.15);
+   toast('BREACH','#ff7a8a');}
+ }
+ // static aura
+ if(S.aura){for(const en of S.enemies){if(en.dead)continue;const p=enemyPos(en);
+  let inR=false; S.towers.forEach(t=>{if(inR)return;const st=towerStats(t),tp=cellPos(t.c,t.r,0);
+   if(Math.hypot(p[0]-tp[0],p[2]-tp[2])<st.range)inR=true;});
+  if(inR)damage(en,S.aura*dt,undefined);}}
+ // towers
+ S.towers.forEach(t=>{
+  if(t.pop>0)t.pop-=dt*2.2;
+  const st=towerStats(t), tp=cellPos(t.c,t.r,0);
+  t.cd-=dt;
+  let best=null,bd=1e9;
+  for(const en of S.enemies){if(en.dead)continue;const p=enemyPos(en);
+   const d=Math.hypot(p[0]-tp[0],p[2]-tp[2]);
+   if(d<st.range&&en.t>bd*-1&&(best===null||en.t>best.t)){best=en;bd=d;}}
+  if(best){const p=enemyPos(best);t.rot=Math.atan2(p[0]-tp[0],p[2]-tp[2]);}
+  if(t.cd<=0&&best){
+   t.cd=1/st.rate;
+   S.shots.push({p:[tp[0],0.85+t.tier*0.06,tp[2]],tgt:best,e:t.e,dmg:st.dmg,spd:11,life:2,tier:t.tier});
+  }});
+ // projectiles
+ for(const s of S.shots){
+  s.life-=dt; if(s.life<=0){s.done=true;continue;}
+  if(!s.tgt||s.tgt.dead){s.done=true;continue;}
+  const tp=enemyPos(s.tgt), d=V.s(tp,s.p), len=Math.hypot(d[0],d[1],d[2]);
+  if(len<0.28){ hit(s); s.done=true; continue;}
+  const k=Math.min(1,s.spd*dt/len);
+  s.p=[s.p[0]+d[0]*k,s.p[1]+d[1]*k,s.p[2]+d[2]*k];}
+ S.shots=S.shots.filter(s=>!s.done);
+ // fx
+ for(const f of S.fx){f.l-=dt;f.v[1]-=9*dt;f.p=[f.p[0]+f.v[0]*dt,Math.max(0.05,f.p[1]+f.v[1]*dt),f.p[2]+f.v[2]*dt];}
+ S.fx=S.fx.filter(f=>f.l>0);
+ S.enemies=S.enemies.filter(e=>!e.dead);
+ if(S.lives<=0){gameOver();return;}
+ if(!S.spawnQ.length&&!S.enemies.length)endWave();
+}
+function hit(s){
+ const en=s.tgt; damage(en,s.dmg,s.e);
+ if(s.e===0){en.burn=2.2;en.burnDps=s.dmg*0.22;}
+ if(s.e===1){en.slow=1.6;}
+ if(s.e===2){
+  const p=enemyPos(en); let n=2+S.chain;
+  for(const o of S.enemies){if(n<=0)break;if(o===en||o.dead)continue;
+   const q=enemyPos(o); if(Math.hypot(p[0]-q[0],p[2]-q[2])<1.7){damage(o,s.dmg*0.5,s.e);n--;
+    S.fx.push({p:q,v:[0,1,0],l:.2,m:.3,col:ELE[2].col});}}}
+ S.fx.push({p:s.p.slice(),v:[0,1,0],l:.18,m:.4,col:ELE[s.e].col});
+}
+
+/* ============================ RENDER ============================ */
+const labs=document.getElementById('labels');const labPool=[];
+function project(p){const x=VP[0]*p[0]+VP[4]*p[1]+VP[8]*p[2]+VP[12],
+ y=VP[1]*p[0]+VP[5]*p[1]+VP[9]*p[2]+VP[13], w=VP[3]*p[0]+VP[7]*p[1]+VP[11]*p[2]+VP[15];
+ if(w<=0)return null; return [(x/w*0.5+0.5)*innerWidth,(0.5-y/w*0.5)*innerHeight];}
+let time=0;
+function render(){
+ gl.clearColor(0.02,0.025,0.055,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ gl.uniformMatrix4fv(U.vp,false,VP);gl.uniform3fv(U.eye,eye);
+ // ground plate
+ draw(G.box,[0,-0.35,0],0,[GRID*CS+1.6,0.5,GRID*CS+1.6],[0.055,0.07,0.13],0.05);
+ // cells
+ for(let c=0;c<GRID;c++)for(let r=0;r<GRID;r++){
+  const p=cellPos(c,r,0), on=isPath(c,r);
+  const selHere=S.sel&&S.sel[0]===c&&S.sel[1]===r;
+  const col=on?[0.16,0.11,0.24]:[0.09,0.13,0.22];
+  draw(G.box,[p[0],-0.03,p[2]],0,[CS*0.94,0.12,CS*0.94],selHere?[0.14,0.3,0.22]:col,selHere?0.35:0);
+ }
+ // path glow markers
+ for(let i=0;i<PATH.length;i++){const p=cellPos(PATH[i][0],PATH[i][1],0);
+  const g=0.3+0.3*Math.sin(time*3-i*0.5);
+  draw(G.box,[p[0],0.035,p[2]],0.785,[0.5,0.02,0.5],[0.45*g,0.16*g,0.6*g],g*0.5);}
+ // portal + core
+ const st=cellPos(PATH[0][0],PATH[0][1],0), en=cellPos(PATH[PATH.length-1][0],PATH[PATH.length-1][1],0);
+ draw(G.cyl,[st[0],0.4,st[2]],time,[0.75,0.8,0.75],[0.5,0.2,0.7],0.55);
+ draw(G.oct,[en[0],0.6+Math.sin(time*2)*0.08,en[2]],time*0.8,[1.0,1.0,1.0],[0.2,0.9,0.7],0.6);
+ draw(G.cyl,[en[0],0.06,en[2]],0,[1.0,0.1,1.0],[0.1,0.4,0.35],0.3);
+ // towers
+ S.towers.forEach(t=>{
+  const p=cellPos(t.c,t.r,0), e=ELE[t.e], stt=towerStats(t);
+  const pop=1+Math.max(0,t.pop)*0.35;
+  const h=0.4+t.tier*0.11;
+  draw(G.box,[p[0],0.12*pop,p[2]],t.rot,[0.72*pop,0.24,0.72*pop],[0.14,0.17,0.26],0);
+  draw(G.cyl,[p[0],0.12+h/2,p[2]],t.rot,[0.42*pop,h,0.42*pop],e.col.map(x=>x*0.55),0.08);
+  // barrel
+  draw(G.box,[p[0]+Math.sin(t.rot)*0.28,0.12+h+0.1,p[2]+Math.cos(t.rot)*0.28],t.rot,[0.16,0.16,0.5],e.col,0.25);
+  // tier crown
+  const ring=Math.min(t.tier,5);
+  for(let i=0;i<ring;i++){const a=time*(1+t.tier*0.2)+i/ring*6.283, rr=0.34+t.tier*0.012;
+   draw(G.oct,[p[0]+Math.cos(a)*rr,0.12+h+0.28+Math.sin(time*2+i)*0.04,p[2]+Math.sin(a)*rr],a,
+    [0.11,0.11,0.11],e.col,0.7);}
+  if(t.tier>5)draw(G.oct,[p[0],0.12+h+0.5,p[2]],time*2,[0.24,0.24,0.24],e.col,0.9);
+  // range ring when selected
+  if(S.sel&&S.sel[0]===t.c&&S.sel[1]===t.r){
+   const R=stt.range;
+   for(let i=0;i<32;i++){const a=i/32*6.283;
+    draw(G.box,[p[0]+Math.cos(a)*R,0.07,p[2]+Math.sin(a)*R],-a,[0.06,0.05,0.22],e.col,1.1,0.9);}}
+ });
+ // enemies
+ for(const e of S.enemies){
+  const p=enemyPos(e), col=ELE[e.res].col, f=e.flash>0?1:0;
+  const s=e.boss?0.85:0.44;
+  draw(e.boss?G.oct:G.box,p,time*1.5+e.bob,[s,s,s],f?[1,1,1]:col,f?1.1:0.5);
+  draw(G.oct,[p[0],p[1]+s*0.8,p[2]],-time*2,[s*0.42,s*0.42,s*0.42],[1,1,1],0.6);
+  // hp bar
+  const hpf=clamp(e.hp/e.max,0,1), bw=e.boss?1.2:0.62, yy=p[1]+s*1.25;
+  draw(G.box,[p[0],yy,p[2]],0,[bw,0.06,0.06],[0.1,0.02,0.05],0.1);
+  draw(G.box,[p[0]-bw*(1-hpf)/2,yy,p[2]+0.001],0,[bw*hpf,0.075,0.075],
+   hpf>0.5?[0.35,1,0.5]:[1,0.4,0.35],0.8);
+  if(e.slow>0)draw(G.oct,[p[0],p[1],p[2]],time,[s*1.5,s*1.5,s*1.5],[0.3,0.8,1],0.4,0.28);
+ }
+ // shots
+ for(const s of S.shots)draw(G.oct,s.p,time*4,[0.14+s.tier*0.012,0.14,0.14],ELE[s.e].col,1.2);
+ // fx
+ for(const f of S.fx){const k=f.l/f.m;draw(G.box,f.p,time*3,[0.12*k,0.12*k,0.12*k],f.col,1.0,k);}
+ // labels (tier numbers)
+ let li=0;
+ S.towers.forEach(t=>{
+  const p=cellPos(t.c,t.r,1.05+t.tier*0.11), sc=project(p); if(!sc)return;
+  let el=labPool[li]; if(!el){el=document.createElement('div');el.className='lab';labs.appendChild(el);labPool[li]=el;}
+  el.style.display='block';el.style.left=sc[0]+'px';el.style.top=sc[1]+'px';
+  el.style.color='rgb('+ELE[t.e].col.map(x=>(x*255)|0).join(',')+')';
+  el.textContent='T'+t.tier; li++;});
+ for(let i=li;i<labPool.length;i++)labPool[i].style.display='none';
+}
+
+/* ============================ UI ============================ */
+const $=id=>document.getElementById(id);
+function toast(msg,col){const t=$('toast');t.textContent=msg;t.style.color=col||'#fff';
+ t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,1300);}
+function showOverlay(html,bind){const o=$('overlay');$('card').innerHTML=html;o.style.display='flex';
+ if(bind)bind($('card'));}
+function hideOverlay(){$('overlay').style.display='none';}
+function refresh(){
+ if(!S)return;
+ $('uGold').textContent=Math.floor(S.gold);$('uLife').textContent=Math.max(0,S.lives);
+ $('uWave').textContent=S.wave;$('uDepth').textContent=S.depth;
+ $('uInt').textContent=(S.interest*100).toFixed(0)+'%';$('uScore').textContent=S.score;
+ $('uRelics').innerHTML=S.relics.map(r=>`<span class="rl">${r}</span>`).join('');
+ const names=['EMBER','FROST','VOLT'],cols=['#ff6b3d','#54d2ff','#c07bff'];
+ $('threat').innerHTML='<div style="font-size:10px;letter-spacing:1px;opacity:.7">SWARM ADAPTATION</div>'+
+  S.threat.map((v,i)=>`<div style="color:${cols[i]}">${names[i]} resist ${(v*100)|0}%
+   <div class="bar"><i style="width:${(v*100)|0}%;background:${cols[i]}"></i></div></div>`).join('')+
+  `<div style="opacity:.6;margin-top:3px;font-size:9px">they harden against your best element.<br>mix your field to stay ahead.</div>`;
+ // selection
+ const selEl=$('sel');
+ const t=S.sel?S.towers.get(key(S.sel[0],S.sel[1])):null;
+ if(t){const st=towerStats(t);
+  selEl.style.display='block';
+  selEl.innerHTML=`<b style="color:rgb(${ELE[t.e].col.map(x=>(x*255)|0).join(',')})">${ELE[t.e].name} T${t.tier}</b>
+   — ${st.dmg.toFixed(0)} dmg · ${st.rate.toFixed(2)}/s · ${st.range.toFixed(1)} range
+   <span class="small">${ELE[t.e].desc} · tap a matching tower to MERGE, empty tile to move</span>`;
+ } else selEl.style.display='none';
+ // actions
+ const a=$('actions');
+ if(phase==='build'){
+  const g=S.pendingGambit;
+  a.innerHTML=`<button id="bRec">RECRUIT ◆${recruitCost()}<span class="small">random tier-1 tower</span></button>
+   ${t?`<button id="bSell" class="warn">SELL<span class="small">+◆${Math.round(14*Math.pow(2,t.tier-1))}</span></button>`:''}
+   <button id="bGo" class="go">START WAVE ${S.wave+1}<span class="small">${g?'gambit: '+g.n:'hold prisms → +'+(S.interest*100|0)+'% interest'}</span></button>`;
+  $('bRec').onclick=()=>recruit(false);
+  if(t)$('bSell').onclick=()=>sell(t);
+  $('bGo').onclick=()=>{const g=S.pendingGambit;S.pendingGambit=null;startWave(g);};
+ } else if(phase==='combat'){
+  a.innerHTML=`<button id="bRec">RECRUIT ◆${recruitCost()}<span class="small">build mid-wave</span></button>
+   <span class="panel stat" style="pointer-events:none">${S.enemies.length+S.spawnQ.length} hostiles · ${S.mods.name}</span>`;
+  $('bRec').onclick=()=>recruit(false);
+ } else a.innerHTML='';
+}
+function metaHTML(){
+ return `<h2>CONVERGENCE CORE — permanent</h2>
+ <p class="sub">cores: <b class="core">${meta.cores}</b> · best score ${meta.best} · runs ${meta.runs} · depth ${meta.depth}
+ <br>survive to wave 20 to ascend a depth: harder swarms, larger payouts, permanent bragging rights.</p>
+ <div class="meta">${UPG.map(u=>{const l=meta.up[u.k],mx=l>=u.max,c=u.cost(l);
+  return `<div class="mrow"><span><b>${u.n}</b> ${l}/${u.max}<br><span style="opacity:.7;font-size:10px">${u.d}</span></span>
+   <button data-u="${u.k}" ${mx||meta.cores<c?'disabled':''}>${mx?'MAX':'◆'+c}</button></div>`;}).join('')}</div>
+ <div class="row" style="justify-content:center;gap:8px;margin-top:6px">
+  <button id="bPlay" class="go" style="padding:14px 22px">START RUN</button>
+  ${meta.depth>1?`<button id="bDepth">DEPTH ${meta.depth} ▾<span class="small">tap to lower</span></button>`:''}
+ </div>`;
+}
+function bindMeta(el){
+ el.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{
+  const u=UPG.find(x=>x.k===b.dataset.u),l=meta.up[u.k],c=u.cost(l);
+  if(meta.cores<c||l>=u.max)return; meta.cores-=c; meta.up[u.k]++; saveMeta(); blip(600,.06);
+  showOverlay(document.querySelector('#card h1')?document.querySelector('#card h1').outerHTML+metaHTML():metaHTML(),bindMeta);});
+ const p=el.querySelector('#bPlay'); if(p)p.onclick=()=>newRun();
+ const d=el.querySelector('#bDepth'); if(d)d.onclick=()=>{meta.depth=meta.depth>1?meta.depth-1:1;saveMeta();
+  showOverlay(metaHTML(),bindMeta);};
+}
+function menu(){
+ phase='menu';
+ showOverlay(`<h1>PRISM CONVERGENCE</h1>
+  <p class="sub">merge towers · defend the core · the swarm adapts to you<br>
+  <b style="color:#8be9fd">RECRUIT</b> towers, tap one then a matching one to <b style="color:#b8ff6b">MERGE</b> it up a tier.<br>
+  Each wave the swarm hardens against whichever element hurt it most — a single-element field always loses.<br>
+  Prisms you don't spend earn <b>interest</b>. Gambits trade danger for loot. Relics stack into absurdity.</p>`
+  +metaHTML(),bindMeta);
+}
+
+/* ---------- audio ---------- */
+let AC=null;
+function blip(f,v){try{if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
+ const o=AC.createOscillator(),g=AC.createGain();o.type='triangle';o.frequency.value=f;
+ g.gain.setValueAtTime(v,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.0001,AC.currentTime+0.25);
+ o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+0.26);}catch(e){}}
+
+/* ---------- loop ---------- */
+let last=performance.now(),acc=0;
+function frame(now){
+ const dt=Math.min(0.05,(now-last)/1000);last=now;time+=dt;
+ if(S&&phase==='combat'){step(dt);acc+=dt;if(acc>0.15){acc=0;refresh();}}
+ if(!S)S={towers:new Map(),enemies:[],shots:[],fx:[],sel:null,threat:[.33,.33,.34]};
+ updCam();render();
+ requestAnimationFrame(frame);}
+menu(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,2502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Merge Siege</title>
+  <style>
+    :root{
+      --bg0:#04070d;
+      --bg1:#07111c;
+      --panel:rgba(7,12,20,.78);
+      --panel2:rgba(10,17,28,.92);
+      --line:rgba(122, 231, 255, .18);
+      --text:#ecf7ff;
+      --muted:#98abc0;
+      --accent:#7ef0ff;
+      --accent2:#ffcc66;
+      --danger:#ff627a;
+      --good:#74f5a0;
+      --shadow:0 24px 70px rgba(0,0,0,.45);
+      --tile:64px;
+      --boardW: 512px;
+      --boardH: 512px;
+      --radius:18px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;
+      width:100%;
+      height:100%;
+      overflow:hidden;
+      background:
+        radial-gradient(1200px 600px at 20% 10%, rgba(97, 153, 255, .12), transparent 65%),
+        radial-gradient(800px 500px at 80% 20%, rgba(255, 120, 196, .10), transparent 65%),
+        radial-gradient(900px 700px at 50% 100%, rgba(90, 255, 181, .08), transparent 60%),
+        linear-gradient(180deg, var(--bg1), var(--bg0));
+      color:var(--text);
+      font-family: "Trebuchet MS", "Verdana", sans-serif;
+      touch-action:none;
+      user-select:none;
+    }
+
+    #app{
+      position:relative;
+      width:100%;
+      height:100%;
+      overflow:hidden;
+    }
+
+    #ambient{
+      position:absolute;
+      inset:-20%;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(126,240,255,.09), transparent 24%),
+        radial-gradient(circle at 68% 38%, rgba(255,204,102,.08), transparent 20%),
+        radial-gradient(circle at 55% 72%, rgba(116,245,160,.08), transparent 24%);
+      filter: blur(24px);
+      pointer-events:none;
+      animation: drift 18s linear infinite;
+      opacity:.9;
+    }
+
+    @keyframes drift{
+      0%{transform:translate3d(0,0,0) scale(1)}
+      50%{transform:translate3d(2.5%, -1.5%, 0) scale(1.04)}
+      100%{transform:translate3d(0,0,0) scale(1)}
+    }
+
+    #hud{
+      position:absolute;
+      top:0;
+      left:0;
+      right:0;
+      padding:12px 12px 0;
+      z-index:30;
+      pointer-events:none;
+    }
+
+    .hudRow{
+      display:flex;
+      gap:10px;
+      align-items:stretch;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+
+    .panel{
+      background:linear-gradient(180deg, rgba(20,30,44,.88), rgba(8,12,20,.80));
+      border:1px solid rgba(126,240,255,.16);
+      box-shadow:var(--shadow);
+      backdrop-filter: blur(14px);
+      border-radius:18px;
+    }
+
+    .hudCard{
+      min-width:0;
+      padding:10px 12px;
+      flex:1 1 200px;
+    }
+
+    .statLine{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px 16px;
+      align-items:center;
+      font-size:13px;
+      letter-spacing:.02em;
+      color:var(--muted);
+    }
+
+    .statLine strong{
+      color:var(--text);
+      font-size:14px;
+      font-weight:700;
+    }
+
+    .titleLine{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:4px;
+    }
+
+    .title{
+      font-family: "Palatino Linotype", Georgia, serif;
+      font-size:18px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:#f4fbff;
+    }
+
+    .subtle{
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    #sceneWrap{
+      position:absolute;
+      inset:0;
+      display:grid;
+      place-items:center;
+      padding:76px 12px 150px;
+    }
+
+    #scene{
+      position:relative;
+      width:min(94vw, 720px);
+      height:min(70vh, 720px);
+      perspective:1200px;
+      display:grid;
+      place-items:center;
+    }
+
+    #board{
+      position:relative;
+      transform-style:preserve-3d;
+      transform: rotateX(66deg) rotateZ(45deg) translateZ(0);
+      filter: drop-shadow(0 45px 80px rgba(0,0,0,.45));
+      will-change:transform;
+    }
+
+    #boardFrame{
+      position:absolute;
+      inset:-24px;
+      border-radius:28px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.05), transparent 35%),
+        linear-gradient(180deg, rgba(126,240,255,.06), rgba(0,0,0,.10));
+      transform: translateZ(-12px);
+      pointer-events:none;
+      border:1px solid rgba(126,240,255,.14);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+    }
+
+    .tile{
+      position:absolute;
+      width:var(--tile);
+      height:var(--tile);
+      border-radius:14px;
+      background:
+        linear-gradient(180deg, rgba(14,22,33,.92), rgba(7,11,18,.94));
+      border:1px solid rgba(120,160,190,.12);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
+      overflow:hidden;
+      transform-style:preserve-3d;
+    }
+
+    .tile::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.08), transparent 32%),
+        linear-gradient(180deg, transparent, rgba(0,0,0,.16));
+      opacity:.8;
+      pointer-events:none;
+    }
+
+    .tile.path{
+      background:
+        linear-gradient(180deg, rgba(16, 37, 47, .96), rgba(7, 16, 24, .96));
+      border-color:rgba(126,240,255,.16);
+      box-shadow:
+        inset 0 0 0 1px rgba(126,240,255,.04),
+        0 0 18px rgba(126,240,255,.03);
+    }
+
+    .tile.path::after{
+      content:"";
+      position:absolute;
+      inset:10px;
+      border-radius:10px;
+      background:
+        linear-gradient(90deg, rgba(126,240,255,.11), rgba(255,255,255,.02), rgba(126,240,255,.08));
+      opacity:.55;
+      filter: blur(.2px);
+    }
+
+    .tile.core{
+      background:
+        radial-gradient(circle at 50% 35%, rgba(255,255,255,.12), transparent 40%),
+        linear-gradient(180deg, rgba(48,18,27,.98), rgba(10,9,16,.98));
+      border-color:rgba(255,98,122,.32);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.03),
+        0 0 30px rgba(255,98,122,.16);
+    }
+
+    .tile.core::after{
+      content:"";
+      position:absolute;
+      inset:9px;
+      border-radius:11px;
+      background: radial-gradient(circle, rgba(255,98,122,.18), rgba(255,98,122,.04) 55%, transparent 75%);
+    }
+
+    .tile.buildable{
+      background:
+        radial-gradient(circle at 50% 50%, rgba(126,240,255,.18), rgba(7,12,20,.80) 60%),
+        linear-gradient(180deg, rgba(14,18,28,.95), rgba(6,9,14,.98));
+      border-color:rgba(126,240,255,.18);
+      box-shadow:
+        inset 0 0 0 1px rgba(126,240,255,.06),
+        0 0 18px rgba(126,240,255,.05);
+      cursor:pointer;
+      transition:transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+    }
+
+    .tile.buildable::after{
+      content:"";
+      position:absolute;
+      inset:15%;
+      border-radius:50%;
+      border:1px dashed rgba(126,240,255,.24);
+      opacity:.9;
+    }
+
+    .tile.buildable:hover,
+    .tile.buildable.active{
+      border-color:rgba(126,240,255,.38);
+      box-shadow:
+        inset 0 0 0 1px rgba(126,240,255,.12),
+        0 0 28px rgba(126,240,255,.14);
+      transform: translateY(-1px) scale(1.03);
+    }
+
+    .tile.spawn{
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,204,102,.18), rgba(7,12,20,.78) 58%),
+        linear-gradient(180deg, rgba(35,26,12,.98), rgba(7,9,13,.98));
+      border-color:rgba(255,204,102,.24);
+      box-shadow:0 0 24px rgba(255,204,102,.08);
+    }
+
+    .entity{
+      position:absolute;
+      left:0;
+      top:0;
+      transform-style:preserve-3d;
+      pointer-events:auto;
+      will-change:transform, opacity;
+    }
+
+    .tower{
+      width:calc(var(--tile) * .78);
+      height:calc(var(--tile) * .78);
+      margin-left:calc(var(--tile) * -.39);
+      margin-top:calc(var(--tile) * -.39);
+      cursor:pointer;
+      transform-style:preserve-3d;
+    }
+
+    .tower .base{
+      position:absolute;
+      inset:0;
+      border-radius:18px;
+      transform: translateZ(8px);
+      box-shadow:
+        0 12px 22px rgba(0,0,0,.36),
+        inset 0 1px 0 rgba(255,255,255,.18),
+        inset 0 -8px 14px rgba(0,0,0,.32);
+    }
+
+    .tower .core{
+      position:absolute;
+      left:18%;
+      top:18%;
+      right:18%;
+      bottom:18%;
+      border-radius:16px;
+      transform: translateZ(24px) rotateX(18deg);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
+    }
+
+    .tower .cap{
+      position:absolute;
+      left:32%;
+      top:14%;
+      width:36%;
+      height:36%;
+      border-radius:50%;
+      transform: translateZ(44px);
+      filter: drop-shadow(0 0 12px rgba(255,255,255,.15));
+      animation: capPulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes capPulse{
+      0%,100%{transform: translateZ(44px) scale(1)}
+      50%{transform: translateZ(44px) scale(1.08)}
+    }
+
+    .tower::after{
+      content:"";
+      position:absolute;
+      left:10%;
+      right:10%;
+      bottom:5%;
+      height:18%;
+      border-radius:50%;
+      background:rgba(0,0,0,.32);
+      filter: blur(6px);
+      transform: translateZ(-2px);
+      opacity:.8;
+    }
+
+    .tower.bolt .base{
+      background:linear-gradient(180deg, rgba(47,98,126,.98), rgba(14,22,36,.96));
+    }
+    .tower.bolt .core,
+    .tower.bolt .cap{
+      background:radial-gradient(circle at 35% 30%, #fff, #8ef3ff 22%, #1a91c9 58%, #072231 100%);
+    }
+
+    .tower.cannon .base{
+      background:linear-gradient(180deg, rgba(128,82,43,.98), rgba(33,18,12,.96));
+    }
+    .tower.cannon .core,
+    .tower.cannon .cap{
+      background:radial-gradient(circle at 40% 30%, #fff1d0, #ffcd73 26%, #b15d18 64%, #34160c 100%);
+    }
+
+    .tower.prism .base{
+      background:linear-gradient(180deg, rgba(97,53,127,.98), rgba(24,10,37,.96));
+    }
+    .tower.prism .core,
+    .tower.prism .cap{
+      background:radial-gradient(circle at 35% 30%, #fff, #ef8dff 24%, #8d3bd3 62%, #220b33 100%);
+    }
+
+    .tower.tier1{filter:saturate(1)}
+    .tower.tier2{filter:saturate(1.06) brightness(1.05)}
+    .tower.tier3{filter:saturate(1.12) brightness(1.08)}
+    .tower.tier4{filter:saturate(1.2) brightness(1.12)}
+    .tower.tier5{filter:saturate(1.26) brightness(1.16)}
+    .tower.ascended{filter:saturate(1.4) brightness(1.2) hue-rotate(22deg)}
+
+    .enemy{
+      width:calc(var(--tile) * .54);
+      height:calc(var(--tile) * .54);
+      margin-left:calc(var(--tile) * -.27);
+      margin-top:calc(var(--tile) * -.27);
+      pointer-events:none;
+      transform-style:preserve-3d;
+    }
+
+    .enemy .body{
+      position:absolute;
+      inset:0;
+      border-radius:36% 36% 40% 40%;
+      background:radial-gradient(circle at 35% 25%, rgba(255,255,255,.7), rgba(255,255,255,.14) 10%, transparent 15%),
+        linear-gradient(180deg, rgba(255,255,255,.08), rgba(0,0,0,.16)),
+        var(--enemyColor);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.2),
+        0 12px 20px rgba(0,0,0,.35);
+      transform: translateZ(22px) rotateX(18deg);
+      animation: bob 1.6s ease-in-out infinite;
+    }
+
+    @keyframes bob{
+      0%,100%{transform: translateZ(22px) rotateX(18deg) translateY(0)}
+      50%{transform: translateZ(22px) rotateX(18deg) translateY(-2px)}
+    }
+
+    .enemy .ring{
+      position:absolute;
+      inset:10%;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.16);
+      transform: translateZ(36px);
+      opacity:.7;
+    }
+
+    .hpBar{
+      position:absolute;
+      left:50%;
+      bottom:100%;
+      width:58px;
+      height:6px;
+      transform:translate(-50%, -8px) translateZ(40px);
+      background:rgba(0,0,0,.36);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:999px;
+      overflow:hidden;
+      box-shadow:0 0 14px rgba(0,0,0,.24);
+    }
+
+    .hpBar > i{
+      display:block;
+      height:100%;
+      width:100%;
+      background:linear-gradient(90deg, var(--good), #b7ff6c);
+      transform-origin:left center;
+      transform:scaleX(1);
+    }
+
+    .projectile{
+      width:12px;
+      height:12px;
+      margin-left:-6px;
+      margin-top:-6px;
+      border-radius:50%;
+      pointer-events:none;
+      box-shadow:0 0 18px currentColor, 0 0 30px currentColor;
+      transform-style:preserve-3d;
+    }
+
+    .projectile.bolt{background:#86f8ff;color:#86f8ff}
+    .projectile.cannon{background:#ffbc71;color:#ffbc71}
+    .projectile.prism{background:#ef8dff;color:#ef8dff}
+
+    .spark{
+      position:absolute;
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      pointer-events:none;
+      background:currentColor;
+      box-shadow:0 0 16px currentColor;
+      opacity:1;
+      transform:translate3d(0,0,0);
+    }
+
+    .floatText{
+      position:absolute;
+      font-weight:700;
+      font-size:13px;
+      letter-spacing:.02em;
+      text-shadow:0 0 14px rgba(0,0,0,.8);
+      pointer-events:none;
+      white-space:nowrap;
+    }
+    .floatText.good{color:var(--good)}
+    .floatText.bad{color:var(--danger)}
+    .floatText.gold{color:var(--accent2)}
+
+    #dock{
+      position:absolute;
+      left:0;
+      right:0;
+      bottom:0;
+      z-index:28;
+      padding:0 12px 12px;
+    }
+
+    #controls{
+      display:grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap:10px;
+      align-items:stretch;
+    }
+
+    .dockPanel{
+      padding:10px;
+    }
+
+    .dockTitle{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      margin-bottom:8px;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .btnRow{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    button{
+      appearance:none;
+      border:none;
+      color:var(--text);
+      background:linear-gradient(180deg, rgba(26,40,58,.96), rgba(10,17,27,.94));
+      border:1px solid rgba(126,240,255,.16);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+      border-radius:14px;
+      padding:11px 12px;
+      min-height:44px;
+      cursor:pointer;
+      font:inherit;
+      font-size:13px;
+      letter-spacing:.02em;
+      transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease, background .12s ease, opacity .12s ease;
+    }
+
+    button:hover{
+      transform:translateY(-1px);
+      border-color:rgba(126,240,255,.34);
+      box-shadow:0 10px 24px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+    button:active{
+      transform:translateY(0);
+    }
+
+    button.primary{
+      background:linear-gradient(180deg, rgba(126,240,255,.24), rgba(16,29,43,.96));
+      border-color:rgba(126,240,255,.32);
+    }
+
+    button.warn{
+      background:linear-gradient(180deg, rgba(255,204,102,.22), rgba(35,25,12,.96));
+      border-color:rgba(255,204,102,.28);
+    }
+
+    button.danger{
+      background:linear-gradient(180deg, rgba(255,98,122,.22), rgba(32,12,18,.96));
+      border-color:rgba(255,98,122,.28);
+    }
+
+    button.small{
+      padding:9px 10px;
+      min-height:38px;
+      font-size:12px;
+    }
+
+    button.active{
+      border-color:rgba(126,240,255,.55);
+      box-shadow:0 0 0 1px rgba(126,240,255,.12), 0 0 28px rgba(126,240,255,.12);
+    }
+
+    button:disabled{
+      opacity:.5;
+      cursor:not-allowed;
+      transform:none;
+    }
+
+    .towerChoice{
+      flex:1 1 0;
+      min-width:110px;
+      text-align:left;
+    }
+
+    .towerChoice .name{
+      display:block;
+      font-weight:700;
+      font-size:13px;
+      margin-bottom:2px;
+    }
+
+    .towerChoice .desc{
+      display:block;
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.25;
+    }
+
+    #cards{
+      position:absolute;
+      inset:0;
+      z-index:60;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      background:rgba(0,0,0,.46);
+      backdrop-filter: blur(10px);
+    }
+
+    #cards.visible{display:flex}
+
+    .cardPanel{
+      width:min(900px, 100%);
+      padding:16px;
+    }
+
+    .cardHeader{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:end;
+      justify-content:space-between;
+      margin-bottom:14px;
+    }
+
+    .cardHeader h2{
+      margin:0;
+      font-family:"Palatino Linotype", Georgia, serif;
+      font-size:28px;
+      letter-spacing:.04em;
+    }
+
+    .cardHeader p{
+      margin:4px 0 0;
+      color:var(--muted);
+      font-size:13px;
+      max-width:56ch;
+    }
+
+    .cardGrid{
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0, 1fr));
+      gap:12px;
+      margin-bottom:12px;
+    }
+
+    .card{
+      min-height:220px;
+      padding:14px;
+      border-radius:22px;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(126,240,255,.12), transparent 24%),
+        radial-gradient(circle at 70% 20%, rgba(255,204,102,.10), transparent 22%),
+        linear-gradient(180deg, rgba(21,31,46,.96), rgba(8,11,17,.98));
+      border:1px solid rgba(126,240,255,.16);
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:12px;
+      box-shadow:var(--shadow);
+      transform:translateY(10px);
+      opacity:0;
+      animation: cardIn .35s ease forwards;
+    }
+
+    .card:nth-child(2){animation-delay:.05s}
+    .card:nth-child(3){animation-delay:.10s}
+
+    @keyframes cardIn{
+      to{transform:translateY(0);opacity:1}
+    }
+
+    .card h3{
+      margin:0;
+      font-size:18px;
+      letter-spacing:.02em;
+    }
+
+    .card .tag{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      font-size:11px;
+      color:var(--accent2);
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      margin-bottom:8px;
+    }
+
+    .card .body{
+      color:#d8e7f6;
+      font-size:13px;
+      line-height:1.45;
+      flex:1;
+    }
+
+    .card .pick{
+      width:100%;
+    }
+
+    .cardFooter{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      justify-content:space-between;
+      align-items:center;
+      color:var(--muted);
+      font-size:12px;
+      margin-top:2px;
+    }
+
+    .stack{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    #startScreen,#endScreen{
+      position:absolute;
+      inset:0;
+      z-index:80;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+      background:
+        radial-gradient(1000px 700px at 50% 30%, rgba(126,240,255,.10), transparent 50%),
+        rgba(0,0,0,.52);
+      backdrop-filter: blur(10px);
+    }
+
+    .menu{
+      width:min(980px, 100%);
+      padding:20px;
+    }
+
+    .menuGrid{
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap:14px;
+      align-items:start;
+    }
+
+    .hero{
+      padding:18px;
+      border-radius:24px;
+      background:
+        linear-gradient(135deg, rgba(126,240,255,.12), transparent 24%),
+        linear-gradient(180deg, rgba(19,25,36,.95), rgba(8,11,17,.98));
+      border:1px solid rgba(126,240,255,.16);
+      box-shadow:var(--shadow);
+    }
+
+    .hero h1{
+      margin:0 0 8px;
+      font-family:"Palatino Linotype", Georgia, serif;
+      font-size:clamp(38px, 6vw, 74px);
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      line-height:.92;
+    }
+
+    .hero p{
+      margin:0 0 10px;
+      color:#d6e4f4;
+      line-height:1.5;
+      font-size:14px;
+      max-width:68ch;
+    }
+
+    .hero .meta{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap:10px;
+      margin-top:14px;
+    }
+
+    .statBox{
+      padding:12px;
+      border-radius:18px;
+      background:rgba(4,8,12,.42);
+      border:1px solid rgba(126,240,255,.14);
+    }
+
+    .statBox .label{
+      color:var(--muted);
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      margin-bottom:4px;
+    }
+
+    .statBox .value{
+      font-size:18px;
+      font-weight:700;
+    }
+
+    .sidePanel{
+      padding:16px;
+      border-radius:24px;
+      background:rgba(9,14,22,.95);
+      border:1px solid rgba(126,240,255,.14);
+      box-shadow:var(--shadow);
+    }
+
+    .sidePanel h3{
+      margin:0 0 10px;
+      font-size:18px;
+    }
+
+    .helpList{
+      margin:0;
+      padding-left:18px;
+      color:#d6e4f4;
+      line-height:1.5;
+      font-size:13px;
+    }
+
+    .helpList li{margin-bottom:8px}
+
+    .contractGrid{
+      display:grid;
+      gap:10px;
+      margin-top:14px;
+    }
+
+    .contractCard{
+      padding:12px;
+      border-radius:18px;
+      background:linear-gradient(180deg, rgba(27,40,59,.95), rgba(9,13,21,.96));
+      border:1px solid rgba(126,240,255,.16);
+    }
+
+    .contractCard .name{
+      font-weight:700;
+      margin-bottom:4px;
+    }
+
+    .contractCard .desc{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.4;
+      margin-bottom:8px;
+    }
+
+    .contractCard .bonus{
+      color:var(--accent2);
+      font-size:12px;
+    }
+
+    .endSummary{
+      margin-top:12px;
+      padding:12px;
+      border-radius:18px;
+      background:rgba(5,8,14,.5);
+      border:1px solid rgba(126,240,255,.12);
+      color:#d7e6f4;
+      font-size:13px;
+      line-height:1.5;
+    }
+
+    .hidden{display:none !important;}
+
+    @media (max-width: 900px){
+      :root{ --tile: 52px; }
+      #sceneWrap{padding-top:72px;padding-bottom:174px}
+      #scene{width:min(96vw, 600px);height:min(62vh, 600px)}
+      .menuGrid{grid-template-columns:1fr}
+      .hero .meta{grid-template-columns:1fr}
+      .cardGrid{grid-template-columns:1fr}
+      #controls{grid-template-columns:1fr}
+      .towerChoice{min-width:0}
+      .hudCard{flex-basis:100%}
+      .card{min-height:unset}
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="ambient"></div>
+
+    <div id="hud">
+      <div class="hudRow">
+        <div class="panel hudCard">
+          <div class="titleLine">
+            <div class="title">Merge Siege</div>
+            <div class="subtle" id="seedLabel">Seed --</div>
+          </div>
+          <div class="statLine" id="statusLine">
+            <span>Wave <strong id="waveStat">1</strong></span>
+            <span>Base <strong id="hpStat">30/30</strong></span>
+            <span>Gold <strong id="goldStat">0</strong></span>
+            <span>Shards <strong id="shardStat">0</strong></span>
+            <span>Chain <strong id="chainStat">x1.00</strong></span>
+            <span id="contractStat">Contract: --</span>
+          </div>
+        </div>
+        <div class="panel hudCard">
+          <div class="titleLine">
+            <div class="title">Run Pressure</div>
+            <div class="subtle" id="waveRewardLabel">Reward 0</div>
+          </div>
+          <div class="statLine">
+            <span>Enemies <strong id="enemyStat">0</strong></span>
+            <span>Towers <strong id="towerStat">0</strong></span>
+            <span>Merges <strong id="mergeStat">0</strong></span>
+            <span>Rerolls <strong id="rerollStat">0</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="sceneWrap">
+      <div id="scene">
+        <div id="boardFrame"></div>
+        <div id="board"></div>
+        <div id="fx"></div>
+      </div>
+    </div>
+
+    <div id="dock">
+      <div id="controls">
+        <div class="panel dockPanel">
+          <div class="dockTitle">
+            <span>Forge</span>
+            <span id="modeLabel">Build mode</span>
+          </div>
+          <div class="btnRow" id="towerButtons">
+            <button class="towerChoice active" data-type="bolt">
+              <span class="name">Bolt</span>
+              <span class="desc">Fast single-target, strong against runners.</span>
+            </button>
+            <button class="towerChoice" data-type="cannon">
+              <span class="name">Cannon</span>
+              <span class="desc">Slower splash damage for clustered waves.</span>
+            </button>
+            <button class="towerChoice" data-type="prism">
+              <span class="name">Prism</span>
+              <span class="desc">Chain hit with flexible lane control.</span>
+            </button>
+          </div>
+        </div>
+        <div class="panel dockPanel">
+          <div class="dockTitle">
+            <span>Actions</span>
+            <span id="runHint">Tap a build pad to place.</span>
+          </div>
+          <div class="btnRow">
+            <button id="sellBtn" class="small">Sell mode</button>
+            <button id="rerollBtn" class="small">Reroll perk</button>
+            <button id="pauseBtn" class="small">Pause</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cards">
+      <div class="panel cardPanel">
+        <div class="cardHeader">
+          <div>
+            <h2>Choose a Breakthrough</h2>
+            <p>One upgrade now. The other two can be banked with the run, but the longer you push, the larger the payout becomes.</p>
+          </div>
+          <div class="stack">
+            <button id="continueBtn" class="primary">Continue</button>
+            <button id="bankBtn" class="warn">Cash out</button>
+          </div>
+        </div>
+        <div class="cardGrid" id="cardGrid"></div>
+        <div class="cardFooter">
+          <span id="cardFooterLeft">Pick a card or keep your powder dry.</span>
+          <span id="cardFooterRight">Greed raises difficulty and rewards.</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="startScreen">
+      <div class="menu">
+        <div class="menuGrid">
+          <div class="hero">
+            <h1>Merge Siege</h1>
+            <p>Build a 3D defense grid, fuse matching towers into stronger forms, and decide how far to press the wave chain before banking out. Every run is different, every choice has a cost, and the best reward often arrives right after the point you should have quit.</p>
+            <p>Core loop: place towers on build pads, fuse adjacent duplicates, survive a wave, take a rogue-like upgrade, then choose whether to cash out or push for the next multiplier.</p>
+
+            <div class="meta">
+              <div class="statBox">
+                <div class="label">Best Wave</div>
+                <div class="value" id="bestWaveStat">0</div>
+              </div>
+              <div class="statBox">
+                <div class="label">Meta Shards</div>
+                <div class="value" id="metaShardStat">0</div>
+              </div>
+              <div class="statBox">
+                <div class="label">Run Seed</div>
+                <div class="value" id="startSeedStat">--</div>
+              </div>
+            </div>
+
+            <div style="margin-top:16px" class="btnRow">
+              <button id="startBtn" class="primary">Start Run</button>
+              <button id="resetMetaBtn" class="danger">Reset Meta</button>
+            </div>
+          </div>
+
+          <div class="sidePanel">
+            <h3>How it works</h3>
+            <ul class="helpList">
+              <li>Tap or click a build pad to place the selected tower. Same type and tier will fuse when adjacent.</li>
+              <li>Use sell mode to clear bad placements and rebuild the board into a stronger merge chain.</li>
+              <li>After each wave, choose one breakthrough card or skip it and push on. Higher chain multipliers mean bigger rewards and harder enemies.</li>
+              <li>At any intermission, cash out to bank your run. The tension comes from deciding when the marginal reward no longer beats the risk.</li>
+            </ul>
+
+            <div class="contractGrid" id="contractGrid"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="endScreen" class="hidden">
+      <div class="menu">
+        <div class="hero">
+          <h1 id="endTitle">Run Complete</h1>
+          <p id="endText">Your tower network was sold off and the shards were banked.</p>
+          <div class="endSummary" id="endSummary"></div>
+          <div class="btnRow" style="margin-top:14px">
+            <button id="restartBtn" class="primary">Run Again</button>
+            <button id="metaBtn">Meta Forge</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const boardEl = document.getElementById('board');
+      const fxEl = document.getElementById('fx');
+      const cardsEl = document.getElementById('cards');
+      const cardGridEl = document.getElementById('cardGrid');
+      const startScreenEl = document.getElementById('startScreen');
+      const endScreenEl = document.getElementById('endScreen');
+      const contractGridEl = document.getElementById('contractGrid');
+
+      const waveStatEl = document.getElementById('waveStat');
+      const hpStatEl = document.getElementById('hpStat');
+      const goldStatEl = document.getElementById('goldStat');
+      const shardStatEl = document.getElementById('shardStat');
+      const chainStatEl = document.getElementById('chainStat');
+      const contractStatEl = document.getElementById('contractStat');
+      const waveRewardLabelEl = document.getElementById('waveRewardLabel');
+      const enemyStatEl = document.getElementById('enemyStat');
+      const towerStatEl = document.getElementById('towerStat');
+      const mergeStatEl = document.getElementById('mergeStat');
+      const rerollStatEl = document.getElementById('rerollStat');
+      const seedLabelEl = document.getElementById('seedLabel');
+      const startSeedStatEl = document.getElementById('startSeedStat');
+      const bestWaveStatEl = document.getElementById('bestWaveStat');
+      const metaShardStatEl = document.getElementById('metaShardStat');
+      const modeLabelEl = document.getElementById('modeLabel');
+      const runHintEl = document.getElementById('runHint');
+      const sellBtn = document.getElementById('sellBtn');
+      const rerollBtn = document.getElementById('rerollBtn');
+      const pauseBtn = document.getElementById('pauseBtn');
+      const continueBtn = document.getElementById('continueBtn');
+      const bankBtn = document.getElementById('bankBtn');
+      const startBtn = document.getElementById('startBtn');
+      const restartBtn = document.getElementById('restartBtn');
+      const resetMetaBtn = document.getElementById('resetMetaBtn');
+      const metaBtn = document.getElementById('metaBtn');
+      const endTitleEl = document.getElementById('endTitle');
+      const endTextEl = document.getElementById('endText');
+      const endSummaryEl = document.getElementById('endSummary');
+      const contractNames = ['Greed Spiral', 'Fragment Tax', 'Pressure Cooker'];
+      const contractCards = [
+        {
+          name: 'Greed Spiral',
+          desc: '+28% wave and kill rewards. Enemies gain +14% HP each wave. Best for pushing hard and banking late.',
+          bonus: 'Push reward scales faster than danger.'
+        },
+        {
+          name: 'Fragment Tax',
+          desc: 'Merge explosions grant extra shards. Tower costs rise a little each wave, making merge timing more important.',
+          bonus: 'Favors tight build planning and fusion chains.'
+        },
+        {
+          name: 'Pressure Cooker',
+          desc: 'Enemies move faster, but your first card each wave is always offered at a stronger tier.',
+          bonus: 'High volatility, high tempo.'
+        }
+      ];
+
+      const tileSizeBase = { current: 64 };
+      const key = (x, y) => `${x},${y}`;
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const rand = (min = 0, max = 1) => min + Math.random() * (max - min);
+      const choice = arr => arr[(Math.random() * arr.length) | 0];
+      const shuffle = arr => {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = (Math.random() * (i + 1)) | 0;
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+      const fmt = n => Number.isFinite(n) ? Math.floor(n).toString() : '0';
+      const fmt1 = n => (Math.round(n * 100) / 100).toFixed(2);
+      const uid = (() => { let n = 1; return () => n++; })();
+
+      const saveKey = 'merge-siege-meta-v1';
+      const defaultMeta = {
+        shards: 0,
+        bestWave: 0,
+        starterGold: 0,
+        bankYield: 0,
+        mergeDamage: 0,
+        rerolls: 0,
+        interest: 0,
+        discount: 0,
+      };
+
+      function loadMeta() {
+        try {
+          const raw = localStorage.getItem(saveKey);
+          if (!raw) return { ...defaultMeta };
+          const parsed = JSON.parse(raw);
+          return { ...defaultMeta, ...parsed };
+        } catch {
+          return { ...defaultMeta };
+        }
+      }
+
+      function saveMeta() {
+        localStorage.setItem(saveKey, JSON.stringify(meta));
+      }
+
+      let meta = loadMeta();
+
+      const board = {
+        w: 8,
+        h: 8,
+        path: [
+          [0, 3], [1, 3], [2, 3], [2, 2], [2, 1], [3, 1], [4, 1], [4, 2],
+          [4, 3], [5, 3], [6, 3], [6, 4], [6, 5], [5, 5], [4, 5], [3, 5],
+          [3, 6], [2, 6], [1, 6], [1, 5], [0, 5]
+        ],
+        core: [0, 5],
+        spawn: [0, 3],
+        pads: [],
+        tiles: new Map(),
+        padMap: new Map()
+      };
+
+      const pathSet = new Set(board.path.map(([x, y]) => key(x, y)));
+      function isOnBoard(x, y) {
+        return x >= 0 && y >= 0 && x < board.w && y < board.h;
+      }
+
+      function buildPads() {
+        const found = [];
+        for (let y = 0; y < board.h; y++) {
+          for (let x = 0; x < board.w; x++) {
+            const k = key(x, y);
+            if (pathSet.has(k)) continue;
+            const nearPath = [
+              [x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]
+            ].some(([nx, ny]) => pathSet.has(key(nx, ny)));
+            if (nearPath) found.push([x, y]);
+          }
+        }
+        board.pads = found;
+      }
+
+      buildPads();
+
+      const towerDefs = {
+        bolt: {
+          name: 'Bolt',
+          cost: 26,
+          range: 2.45,
+          damage: 7,
+          rate: 0.72,
+          projectileSpeed: 12.5,
+          color: '#86f8ff'
+        },
+        cannon: {
+          name: 'Cannon',
+          cost: 34,
+          range: 2.25,
+          damage: 13,
+          rate: 1.15,
+          projectileSpeed: 10,
+          splash: 0.72,
+          color: '#ffbc71'
+        },
+        prism: {
+          name: 'Prism',
+          cost: 32,
+          range: 2.75,
+          damage: 9,
+          rate: 0.92,
+          projectileSpeed: 13,
+          chain: 2,
+          color: '#ef8dff'
+        }
+      };
+
+      const perkPool = [
+        {
+          id: 'rapid',
+          name: 'Rapid Loom',
+          tag: 'Tempo',
+          desc: 'All towers fire 18% faster.',
+          apply(state) { state.mods.fireRate *= 1.18; }
+        },
+        {
+          id: 'optics',
+          name: 'Optics',
+          tag: 'Range',
+          desc: 'All towers gain +16% range.',
+          apply(state) { state.mods.range *= 1.16; }
+        },
+        {
+          id: 'heavy',
+          name: 'Heavy Casings',
+          tag: 'Damage',
+          desc: 'All towers deal 20% more damage.',
+          apply(state) { state.mods.damage *= 1.2; }
+        },
+        {
+          id: 'bank',
+          name: 'Interest Rate',
+          tag: 'Economy',
+          desc: 'Unspent gold yields +8% extra interest after each wave.',
+          apply(state) { state.mods.interest += 0.08; }
+        },
+        {
+          id: 'fuse',
+          name: 'Fuse Bonus',
+          tag: 'Merge',
+          desc: 'Every merge grants immediate gold and a small permanent damage lift.',
+          apply(state) { state.mods.mergeValue += 6; state.mods.mergeDamage *= 1.06; }
+        },
+        {
+          id: 'reroll',
+          name: 'Decision Override',
+          tag: 'Tactic',
+          desc: 'Gain +1 reroll for the current run.',
+          apply(state) { state.rerolls += 1; }
+        },
+        {
+          id: 'pierce',
+          name: 'Piercing Line',
+          tag: 'Bolt',
+          desc: 'Bolt towers seek deeper targets and hit a second target for 40% damage.',
+          apply(state) { state.mods.boltPierce = true; }
+        },
+        {
+          id: 'blast',
+          name: 'Blast Chambers',
+          tag: 'Cannon',
+          desc: 'Cannon splash radius grows by 25% and applies a burn burst on kill.',
+          apply(state) { state.mods.cannonSplash *= 1.25; state.mods.burnOnKill = true; }
+        },
+        {
+          id: 'prism',
+          name: 'Split Spectrum',
+          tag: 'Prism',
+          desc: 'Prism chains one extra jump and gains +20% projectile speed.',
+          apply(state) { state.mods.prismChain += 1; state.mods.projectileSpeed *= 1.2; }
+        }
+      ];
+
+      const contracts = [
+        {
+          name: 'Greed Spiral',
+          desc: 'Rewards rise faster than danger. The longer you push, the more the bank pays out.',
+          bonus: 'Wave rewards +28%, enemy HP +14% per wave.',
+          modifiers: { reward: 1.28, enemyHp: 1.14, enemySpeed: 1.00, shard: 1.15 }
+        },
+        {
+          name: 'Fragment Tax',
+          desc: 'Merges are worth more shards, but tower prices drift upward every wave.',
+          bonus: 'Merge payouts +40%, tower price +4% per wave.',
+          modifiers: { reward: 1.0, enemyHp: 1.06, enemySpeed: 1.0, shard: 1.4 }
+        },
+        {
+          name: 'Pressure Cooker',
+          desc: 'Enemies move faster, but your first card each wave is stronger than usual.',
+          bonus: 'Enemy speed +12%, first card is boosted.',
+          modifiers: { reward: 1.08, enemyHp: 1.0, enemySpeed: 1.12, shard: 1.0 }
+        }
+      ];
+
+      const state = {
+        running: false,
+        paused: false,
+        over: false,
+        waveActive: false,
+        intermission: false,
+        wave: 1,
+        hp: 30,
+        maxHp: 30,
+        gold: 0,
+        runShards: 0,
+        chain: 1,
+        bestChain: 1,
+        rewardPulse: 0,
+        selectedType: 'bolt',
+        mode: 'build',
+        seed: Math.random().toString(36).slice(2, 8).toUpperCase(),
+        contract: choice(contracts),
+        rerolls: 2,
+        spawnTimer: 0,
+        spawnDelay: 0.6,
+        spawnQueue: [],
+        towers: [],
+        enemies: [],
+        projectiles: [],
+        effects: [],
+        score: 0,
+        kills: 0,
+        merges: 0,
+        currentWaveReward: 0,
+        pendingChoice: null,
+        chosenPerk: false,
+        bankReady: false,
+        cardsTaken: [],
+        mods: {
+          damage: 1,
+          range: 1,
+          fireRate: 1,
+          projectileSpeed: 1,
+          interest: 0,
+          mergeValue: 0,
+          mergeDamage: 1,
+          boltPierce: false,
+          cannonSplash: 1,
+          burnOnKill: false,
+          prismChain: 2,
+        },
+        tileSize: 64,
+        boardOffsetX: 0,
+        boardOffsetY: 0,
+        enemySpawnTick: 0,
+        lastTime: performance.now()
+      };
+
+      function randRange(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function toPxX(x) { return (x + 0.5) * state.tileSize; }
+      function toPxY(y) { return (y + 0.5) * state.tileSize; }
+
+      function setBoardSize() {
+        const scene = document.getElementById('scene');
+        const availW = scene.clientWidth;
+        const availH = scene.clientHeight;
+        const tile = clamp(Math.floor(Math.min(availW / board.w, availH / board.h) * 0.92), 42, 72);
+        state.tileSize = tile;
+        tileSizeBase.current = tile;
+        document.documentElement.style.setProperty('--tile', `${tile}px`);
+        document.documentElement.style.setProperty('--boardW', `${board.w * tile}px`);
+        document.documentElement.style.setProperty('--boardH', `${board.h * tile}px`);
+        boardEl.style.width = `${board.w * tile}px`;
+        boardEl.style.height = `${board.h * tile}px`;
+      }
+
+      function createTile(x, y, cls) {
+        const el = document.createElement('div');
+        el.className = `tile ${cls || ''}`.trim();
+        el.style.left = `${x * state.tileSize}px`;
+        el.style.top = `${y * state.tileSize}px`;
+        el.dataset.x = x;
+        el.dataset.y = y;
+        boardEl.appendChild(el);
+        board.tiles.set(key(x, y), el);
+        return el;
+      }
+
+      function renderBoard() {
+        boardEl.innerHTML = '';
+        board.tiles.clear();
+        board.padMap.clear();
+
+        for (let y = 0; y < board.h; y++) {
+          for (let x = 0; x < board.w; x++) {
+            createTile(x, y, '');
+          }
+        }
+
+        for (const [x, y] of board.path) {
+          const t = board.tiles.get(key(x, y));
+          t.classList.add('path');
+          if (x === board.spawn[0] && y === board.spawn[1]) t.classList.add('spawn');
+          if (x === board.core[0] && y === board.core[1]) t.classList.add('core');
+        }
+
+        for (const [x, y] of board.pads) {
+          const t = board.tiles.get(key(x, y));
+          t.classList.add('buildable');
+          t.addEventListener('click', () => onPadClick(x, y));
+          board.padMap.set(key(x, y), { x, y, tower: null, el: t });
+        }
+      }
+
+      function makeTowerElement(tower) {
+        const el = document.createElement('div');
+        el.className = `entity tower ${tower.type} tier${tower.tier}`;
+        el.innerHTML = '<div class="base"></div><div class="core"></div><div class="cap"></div>';
+        el.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (state.mode === 'sell') sellTower(tower);
+        });
+        boardEl.appendChild(el);
+        tower.el = el;
+      }
+
+      function makeEnemyElement(enemy) {
+        const el = document.createElement('div');
+        el.className = 'entity enemy';
+        el.style.setProperty('--enemyColor', enemy.color);
+        el.innerHTML = '<div class="body"></div><div class="ring"></div><div class="hpBar"><i></i></div>';
+        boardEl.appendChild(el);
+        enemy.el = el;
+      }
+
+      function makeProjectileElement(p) {
+        const el = document.createElement('div');
+        el.className = `entity projectile ${p.type}`;
+        boardEl.appendChild(el);
+        p.el = el;
+      }
+
+      function spawnFloatText(text, x, y, cls = 'good', offsetZ = 0) {
+        const el = document.createElement('div');
+        el.className = `floatText ${cls}`;
+        el.textContent = text;
+        fxEl.appendChild(el);
+        const obj = {
+          el,
+          x,
+          y,
+          z: offsetZ,
+          vy: -0.35,
+          life: 1.0
+        };
+        state.effects.push(obj);
+      }
+
+      function spawnSpark(x, y, color) {
+        const el = document.createElement('div');
+        el.className = 'spark';
+        el.style.color = color;
+        fxEl.appendChild(el);
+        state.effects.push({
+          el,
+          x,
+          y,
+          z: 0,
+          vx: randRange(-1.4, 1.4),
+          vy: randRange(-1.4, 1.4),
+          life: 0.45
+        });
+      }
+
+      function towerStats(tower) {
+        const def = towerDefs[tower.type];
+        const tierScale = 1 + (tower.tier - 1) * 0.38;
+        const mergeBoost = 1 + Math.max(0, tower.fusionStacks || 0) * 0.06;
+        const base = {
+          damage: def.damage * tierScale * state.mods.damage * state.mods.mergeDamage * mergeBoost,
+          range: def.range * (1 + (tower.tier - 1) * 0.07) * state.mods.range,
+          rate: def.rate * Math.pow(0.92, tower.tier - 1) / state.mods.fireRate,
+          projectileSpeed: def.projectileSpeed * state.mods.projectileSpeed
+        };
+        if (tower.type === 'cannon') {
+          base.splash = (def.splash + (tower.tier - 1) * 0.07) * state.mods.cannonSplash;
+        }
+        if (tower.type === 'prism') {
+          base.chain = Math.min(5, state.mods.prismChain + Math.max(0, tower.tier - 1));
+        }
+        if (tower.type === 'bolt' && state.mods.boltPierce) {
+          base.pierce = 2;
+        }
+        return base;
+      }
+
+      function cellOccupied(x, y) {
+        return state.towers.some(t => t.pad.x === x && t.pad.y === y);
+      }
+
+      function padAt(x, y) {
+        return board.padMap.get(key(x, y)) || null;
+      }
+
+      function towerCost(type) {
+        const base = towerDefs[type].cost;
+        const waveTax = 1 + Math.max(0, state.wave - 1) * (state.contract === contracts[1] ? 0.04 : 0.02);
+        return Math.ceil((base * waveTax) * (1 - meta.discount));
+      }
+
+      function onPadClick(x, y) {
+        if (!state.running || state.over || state.paused) return;
+        const pad = padAt(x, y);
+        if (!pad) return;
+        if (state.mode === 'sell') {
+          if (pad.tower) sellTower(pad.tower);
+          return;
+        }
+        if (pad.tower) return;
+        const type = state.selectedType;
+        const cost = towerCost(type);
+        if (state.gold < cost) {
+          spawnFloatText('NO GOLD', toPxX(x), toPxY(y), 'bad');
+          return;
+        }
+        state.gold -= cost;
+        createTower(type, pad);
+        resolveMerges();
+        updateUI();
+      }
+
+      function createTower(type, pad) {
+        const tower = {
+          id: uid(),
+          type,
+          tier: 1,
+          pad,
+          fire: randRange(0, 0.35),
+          el: null,
+          fusionStacks: 0
+        };
+        pad.tower = tower;
+        state.towers.push(tower);
+        makeTowerElement(tower);
+        spawnSpark(toPxX(pad.x), toPxY(pad.y), towerDefs[type].color);
+        spawnFloatText('DEPLOY', toPxX(pad.x), toPxY(pad.y), 'good');
+        return tower;
+      }
+
+      function sellTower(tower) {
+        const idx = state.towers.indexOf(tower);
+        if (idx >= 0) state.towers.splice(idx, 1);
+        if (tower.pad) tower.pad.tower = null;
+        if (tower.el) tower.el.remove();
+        const refundBase = towerCost(tower.type) * 0.72;
+        const refund = Math.ceil(refundBase + tower.tier * 8 + tower.fusionStacks * 5);
+        state.gold += refund;
+        spawnFloatText(`+${refund}`, toPxX(tower.pad.x), toPxY(tower.pad.y), 'gold');
+        updateUI();
+      }
+
+      function resolveMerges() {
+        let merged = true;
+        while (merged) {
+          merged = false;
+          for (let i = 0; i < state.towers.length; i++) {
+            const a = state.towers[i];
+            for (let j = i + 1; j < state.towers.length; j++) {
+              const b = state.towers[j];
+              if (a.type !== b.type || a.tier !== b.tier) continue;
+              const dx = Math.abs(a.pad.x - b.pad.x);
+              const dy = Math.abs(a.pad.y - b.pad.y);
+              if (dx + dy !== 1) continue;
+              const survivor = a.id < b.id ? a : b;
+              const donor = survivor === a ? b : a;
+              if (survivor.tier >= 6) {
+                donor.pad.tower = null;
+                donor.el.remove();
+                state.towers.splice(state.towers.indexOf(donor), 1);
+                survivor.fusionStacks += 1;
+                state.gold += 12;
+                state.runShards += 1;
+                spawnFloatText('ASCEND', toPxX(survivor.pad.x), toPxY(survivor.pad.y), 'good', 10);
+                spawnSpark(toPxX(survivor.pad.x), toPxY(survivor.pad.y), '#ffef95');
+              } else {
+                donor.pad.tower = null;
+                donor.el.remove();
+                state.towers.splice(state.towers.indexOf(donor), 1);
+                survivor.tier += 1;
+                survivor.fusionStacks += 1;
+                survivor.fire = Math.max(0, survivor.fire - 0.1);
+                survivor.el.className = `entity tower ${survivor.type} tier${survivor.tier}${survivor.tier >= 6 ? ' ascended' : ''}`;
+                state.merges += 1;
+                const bonus = 8 + survivor.tier * 4 + Math.floor(state.mods.mergeValue);
+                state.gold += bonus;
+                state.score += 40 * survivor.tier;
+                spawnFloatText(`M+${survivor.tier}`, toPxX(survivor.pad.x), toPxY(survivor.pad.y), 'good', 12);
+                spawnSpark(
+                  (toPxX(survivor.pad.x) + toPxX(donor.pad.x)) / 2,
+                  (toPxY(survivor.pad.y) + toPxY(donor.pad.y)) / 2,
+                  towerDefs[survivor.type].color
+                );
+                if (state.contract === contracts[1]) {
+                  state.runShards += 1;
+                }
+              }
+              merged = true;
+              break;
+            }
+            if (merged) break;
+          }
+        }
+      }
+
+      function nearestEnemyForTower(tower) {
+        const stats = towerStats(tower);
+        const cx = toPxX(tower.pad.x);
+        const cy = toPxY(tower.pad.y);
+        let best = null;
+        let bestScore = -Infinity;
+        for (const enemy of state.enemies) {
+          if (enemy.dead) continue;
+          const dx = enemy.px - cx;
+          const dy = enemy.py - cy;
+          const dist = Math.hypot(dx, dy) / state.tileSize;
+          if (dist > stats.range) continue;
+          const score = enemy.progress * 10 - dist;
+          if (score > bestScore) {
+            bestScore = score;
+            best = enemy;
+          }
+        }
+        return best;
+      }
+
+      function fireTower(tower, target) {
+        const stats = towerStats(tower);
+        tower.fire = stats.rate;
+        const projectile = {
+          id: uid(),
+          type: tower.type,
+          tower,
+          targetId: target.id,
+          x: toPxX(tower.pad.x),
+          y: toPxY(tower.pad.y),
+          z: 36,
+          speed: stats.projectileSpeed * state.tileSize,
+          damage: stats.damage,
+          splash: stats.splash || 0,
+          chain: stats.chain || 0,
+          pierce: stats.pierce || 1,
+          life: 3,
+          el: null
+        };
+        makeProjectileElement(projectile);
+        state.projectiles.push(projectile);
+      }
+
+      function getEnemyById(id) {
+        return state.enemies.find(e => e.id === id && !e.dead) || null;
+      }
+
+      function applyDamage(enemy, damage, source, sourceType) {
+        if (!enemy || enemy.dead) return false;
+        const actual = Math.max(1, damage * (1 - enemy.armor));
+        enemy.hp -= actual;
+        enemy.flash = 0.12;
+        spawnFloatText(Math.round(actual).toString(), enemy.px, enemy.py, 'bad', 6);
+        spawnSpark(enemy.px, enemy.py, sourceType === 'cannon' ? '#ffbc71' : sourceType === 'prism' ? '#ef8dff' : '#86f8ff');
+        if (enemy.hp <= 0) {
+          killEnemy(enemy, source);
+          return true;
+        }
+        return false;
+      }
+
+      function killEnemy(enemy, source) {
+        if (enemy.dead) return;
+        enemy.dead = true;
+        state.kills += 1;
+        state.score += Math.floor(enemy.maxHp * 2 + enemy.reward * 4);
+        const gold = Math.ceil(enemy.reward * state.contract.modifiers.reward * (1 + state.chain * 0.05));
+        state.gold += gold;
+        state.runShards += Math.ceil((enemy.reward * 0.35 + state.chain * 0.2) * state.contract.modifiers.shard);
+        spawnFloatText(`+${gold}`, enemy.px, enemy.py, 'gold', 8);
+        const typeColor = enemy.color;
+        for (let i = 0; i < 7; i++) spawnSpark(enemy.px, enemy.py, typeColor);
+        if (state.mods.burnOnKill && source && source.type === 'cannon') {
+          const radius = state.tileSize * 0.9;
+          for (const other of state.enemies) {
+            if (other.dead || other.id === enemy.id) continue;
+            if (Math.hypot(other.px - enemy.px, other.py - enemy.py) <= radius) {
+              other.hp -= enemy.reward * 0.8;
+            }
+          }
+        }
+        if (enemy.split > 0) {
+          for (let i = 0; i < enemy.split; i++) spawnEnemy('drone', enemy.pathIndex, enemy.t, 0.65);
+        }
+      }
+
+      function spawnEnemy(type, forcedIndex = 0, forcedT = 0, hpBoost = 1) {
+        const baseWave = state.wave;
+        const contract = state.contract.modifiers;
+        let hp = 18 + baseWave * 4;
+        let speed = 0.85 + baseWave * 0.02;
+        let reward = 8 + baseWave * 2;
+        let armor = 0;
+        let split = 0;
+        let color = '#86f8ff';
+        let name = 'Drone';
+        if (type === 'runner') {
+          hp *= 0.82;
+          speed *= 1.35;
+          reward *= 0.9;
+          color = '#8ef3ff';
+          name = 'Runner';
+        } else if (type === 'brute') {
+          hp *= 1.7;
+          speed *= 0.72;
+          reward *= 1.45;
+          armor = 0.12;
+          color = '#ffbc71';
+          name = 'Brute';
+        } else if (type === 'shield') {
+          hp *= 1.3;
+          speed *= 0.9;
+          reward *= 1.3;
+          armor = 0.28;
+          color = '#ef8dff';
+          name = 'Shield';
+        } else if (type === 'splitter') {
+          hp *= 1.15;
+          speed *= 1.02;
+          reward *= 1.2;
+          split = 2;
+          color = '#74f5a0';
+          name = 'Splitter';
+        } else if (type === 'boss') {
+          hp *= 9 + baseWave * 1.2;
+          speed *= 0.62;
+          reward *= 6;
+          armor = 0.2;
+          color = '#ff627a';
+          name = 'Boss';
+        }
+        hp *= contract.enemyHp * hpBoost;
+        speed *= contract.enemySpeed;
+        const enemy = {
+          id: uid(),
+          type,
+          name,
+          hp,
+          maxHp: hp,
+          speed,
+          reward,
+          armor,
+          split,
+          color,
+          pathIndex: forcedIndex,
+          t: forcedT,
+          px: 0,
+          py: 0,
+          dead: false,
+          flash: 0,
+          el: null,
+          progress: forcedIndex + forcedT
+        };
+        setEnemyPosition(enemy);
+        makeEnemyElement(enemy);
+        state.enemies.push(enemy);
+        return enemy;
+      }
+
+      function setEnemyPosition(enemy) {
+        const a = board.path[enemy.pathIndex];
+        const b = board.path[Math.min(enemy.pathIndex + 1, board.path.length - 1)];
+        const px = lerp(a[0], b[0], enemy.t);
+        const py = lerp(a[1], b[1], enemy.t);
+        enemy.px = (px + 0.5) * state.tileSize;
+        enemy.py = (py + 0.5) * state.tileSize;
+        enemy.progress = enemy.pathIndex + enemy.t;
+      }
+
+      function prepWave(n) {
+        state.spawnQueue = [];
+        state.spawnTimer = 0.4;
+        const count = 5 + Math.floor(n * 2.4);
+        const wave5 = n % 5 === 0;
+        if (wave5) {
+          state.spawnQueue.push({ type: 'boss' });
+          for (let i = 0; i < 4 + Math.floor(n * 0.3); i++) state.spawnQueue.push({ type: choice(['runner', 'brute', 'shield', 'splitter']) });
+        } else {
+          for (let i = 0; i < count; i++) {
+            const roll = Math.random();
+            let type = 'runner';
+            if (n < 3) {
+              type = roll < 0.65 ? 'runner' : roll < 0.84 ? 'drone' : 'brute';
+            } else if (n < 7) {
+              type = roll < 0.32 ? 'runner' : roll < 0.56 ? 'drone' : roll < 0.78 ? 'brute' : roll < 0.92 ? 'shield' : 'splitter';
+            } else {
+              type = roll < 0.22 ? 'runner' : roll < 0.42 ? 'drone' : roll < 0.64 ? 'brute' : roll < 0.82 ? 'shield' : 'splitter';
+            }
+            state.spawnQueue.push({ type });
+          }
+        }
+        state.waveActive = true;
+        state.intermission = false;
+        state.chosenPerk = false;
+        state.bankReady = false;
+        state.pendingChoice = null;
+        state.rewardPulse = 0;
+        state.currentWaveReward = 0;
+        cardsEl.classList.remove('visible');
+        runHintEl.textContent = 'Tap a build pad to place. Killing enemies banks more rewards.';
+        updateUI();
+      }
+
+      function choosePerk(choiceIndex) {
+        if (!state.pendingChoice || !state.pendingChoice[choiceIndex]) return;
+        const card = state.pendingChoice[choiceIndex];
+        if (state.chosenPerk && state.cardsTaken.includes(card.id)) return;
+        if (!state.cardsTaken.includes(card.id)) state.cardsTaken.push(card.id);
+        card.apply(state);
+        state.chosenPerk = true;
+        state.bankReady = true;
+        spawnFloatText(card.name.toUpperCase(), state.tileSize * 3.5, state.tileSize * 1.2, 'good');
+        renderCards();
+        updateUI();
+      }
+
+      function showIntermission() {
+        state.intermission = true;
+        state.waveActive = false;
+        state.bankReady = true;
+        state.pendingChoice = pickChoices();
+        renderCards();
+        cardsEl.classList.add('visible');
+        runHintEl.textContent = 'Choose a card, or cash out and bank the run.';
+        updateUI();
+      }
+
+      function pickChoices() {
+        const pool = [...perkPool];
+        shuffle(pool);
+        const picks = pool.slice(0, 3).map(p => ({ ...p }));
+        if (state.contract === contracts[2]) {
+          // Pressure Cooker: bias the first card upward by doubling its impact.
+          const first = picks[0];
+          const originalApply = first.apply;
+          first.apply = (s) => {
+            originalApply(s);
+            s.mods.damage *= 1.04;
+            s.mods.fireRate *= 1.04;
+          };
+          first.desc += ' (Boosted by the contract.)';
+        }
+        return picks;
+      }
+
+      function renderCards() {
+        cardGridEl.innerHTML = '';
+        const cards = state.pendingChoice || [];
+        cards.forEach((card, idx) => {
+          const el = document.createElement('div');
+          el.className = 'card';
+          el.innerHTML = `
+            <div>
+              <div class="tag">${card.tag}</div>
+              <h3>${card.name}</h3>
+            </div>
+            <div class="body">${card.desc}</div>
+            <div class="stack">
+              <button class="pick primary">${state.cardsTaken.includes(card.id) ? 'Taken' : 'Take'}</button>
+            </div>
+          `;
+          const btn = el.querySelector('button');
+          btn.disabled = state.cardsTaken.includes(card.id);
+          btn.addEventListener('click', () => {
+            choosePerk(idx);
+          });
+          cardGridEl.appendChild(el);
+        });
+      }
+
+      function cashOut(final = false) {
+        if (!state.running) return;
+        const base = state.wave * 10 + state.merges * 4 + state.kills * 2;
+        const chainBonus = Math.pow(state.chain, 1.25);
+        const contractBonus = state.contract.modifiers.shard;
+        const bank = Math.floor((base + state.gold * 0.2) * chainBonus * contractBonus * (1 + meta.bankYield));
+        state.runShards += bank;
+        meta.shards += bank;
+        meta.bestWave = Math.max(meta.bestWave, state.wave - (state.waveActive ? 1 : 0));
+        saveMeta();
+        finalizeRun(final ? 'Run ended.' : 'Banked.' , `Banked ${bank} shards from the current run.`);
+      }
+
+      function finalizeRun(title, text) {
+        state.running = false;
+        state.over = true;
+        state.waveActive = false;
+        state.intermission = false;
+        cardsEl.classList.remove('visible');
+        startScreenEl.classList.add('hidden');
+        endScreenEl.classList.remove('hidden');
+        endTitleEl.textContent = title;
+        endTextEl.textContent = text;
+        endSummaryEl.innerHTML = `
+          Wave reached: <strong>${state.wave}</strong><br>
+          Towers fused: <strong>${state.merges}</strong><br>
+          Kills: <strong>${state.kills}</strong><br>
+          Gold held: <strong>${fmt(state.gold)}</strong><br>
+          Shards gained: <strong>${fmt(state.runShards)}</strong><br>
+          Best chain: <strong>x${fmt1(state.bestChain)}</strong>
+        `;
+        metaShardStatEl.textContent = fmt(meta.shards);
+        bestWaveStatEl.textContent = fmt(meta.bestWave);
+        updateUI();
+      }
+
+      function startRun() {
+        state.running = true;
+        state.paused = false;
+        state.over = false;
+        state.waveActive = true;
+        state.intermission = false;
+        state.wave = 1;
+        state.hp = state.maxHp = 30;
+        state.gold = 18 + meta.starterGold;
+        state.runShards = 0;
+        state.chain = 1;
+        state.bestChain = 1;
+        state.rewardPulse = 0;
+        state.rerolls = 2 + meta.rerolls;
+        state.selectedType = 'bolt';
+        state.mode = 'build';
+        state.spawnDelay = 0.6;
+        state.spawnTimer = 0.4;
+        state.spawnQueue = [];
+        state.towers = [];
+        state.enemies = [];
+        state.projectiles = [];
+        state.effects = [];
+        state.score = 0;
+        state.kills = 0;
+        state.merges = 0;
+        state.pendingChoice = null;
+        state.chosenPerk = false;
+        state.bankReady = false;
+        state.cardsTaken = [];
+        state.contract = choice(contracts);
+        state.mods = {
+          damage: 1,
+          range: 1,
+          fireRate: 1,
+          projectileSpeed: 1,
+          interest: 0 + meta.interest,
+          mergeValue: 0,
+          mergeDamage: 1 + meta.mergeDamage,
+          boltPierce: false,
+          cannonSplash: 1,
+          burnOnKill: false,
+          prismChain: 2,
+        };
+        state.seed = Math.random().toString(36).slice(2, 8).toUpperCase();
+        seedLabelEl.textContent = `Seed ${state.seed}`;
+        startSeedStatEl.textContent = state.seed;
+        startScreenEl.classList.add('hidden');
+        endScreenEl.classList.add('hidden');
+        cardsEl.classList.remove('visible');
+        renderBoard();
+        prepWave(state.wave);
+        spawnFloatText(`Wave ${state.wave}`, state.tileSize * 2.5, state.tileSize * 0.8, 'good', 12);
+        pauseBtn.textContent = 'Pause';
+        syncTowerButtons();
+        syncModeButtons();
+        updateUI();
+      }
+
+      function pauseToggle() {
+        if (!state.running) return;
+        state.paused = !state.paused;
+        pauseBtn.textContent = state.paused ? 'Resume' : 'Pause';
+        runHintEl.textContent = state.paused ? 'Paused.' : 'Tap a build pad to place.';
+      }
+
+      function rerollChoices() {
+        if (!state.intermission || !state.pendingChoice) return;
+        if (state.rerolls <= 0) {
+          spawnFloatText('NO REROLLS', state.tileSize * 3.5, state.tileSize * 1.4, 'bad');
+          return;
+        }
+        state.rerolls -= 1;
+        state.pendingChoice = pickChoices();
+        renderCards();
+        updateUI();
+      }
+
+      function updateUI() {
+        waveStatEl.textContent = fmt(state.wave);
+        hpStatEl.textContent = `${fmt(state.hp)}/${fmt(state.maxHp)}`;
+        goldStatEl.textContent = fmt(state.gold);
+        shardStatEl.textContent = fmt(meta.shards + state.runShards);
+        chainStatEl.textContent = `x${fmt1(state.chain)}`;
+        contractStatEl.textContent = `Contract: ${state.contract?.name || '--'}`;
+        waveRewardLabelEl.textContent = state.running ? `Reward ${fmt(state.currentWaveReward)}` : `Meta ${fmt(meta.shards)}`;
+        enemyStatEl.textContent = fmt(state.enemies.filter(e => !e.dead).length);
+        towerStatEl.textContent = fmt(state.towers.length);
+        mergeStatEl.textContent = fmt(state.merges);
+        rerollStatEl.textContent = fmt(state.rerolls);
+        modeLabelEl.textContent = state.mode === 'sell' ? 'Sell mode' : 'Build mode';
+        sellBtn.textContent = state.mode === 'sell' ? 'Building mode' : 'Sell mode';
+        rerollBtn.disabled = !state.intermission || state.rerolls <= 0;
+        continueBtn.disabled = !state.intermission;
+        bankBtn.disabled = !state.running || !state.intermission;
+        metaShardStatEl.textContent = fmt(meta.shards);
+        bestWaveStatEl.textContent = fmt(meta.bestWave);
+      }
+
+      function renderContracts() {
+        contractGridEl.innerHTML = '';
+        contracts.forEach((c) => {
+          const el = document.createElement('div');
+          el.className = 'contractCard';
+          el.innerHTML = `
+            <div class="name">${c.name}</div>
+            <div class="desc">${c.desc}</div>
+            <div class="bonus">${c.bonus}</div>
+          `;
+          contractGridEl.appendChild(el);
+        });
+      }
+
+      function syncBoardLayout() {
+        for (const [k, el] of board.tiles) {
+          const [x, y] = k.split(',').map(Number);
+          el.style.left = `${x * state.tileSize}px`;
+          el.style.top = `${y * state.tileSize}px`;
+          el.style.width = `${state.tileSize}px`;
+          el.style.height = `${state.tileSize}px`;
+        }
+      }
+
+      function updateTowerElement(tower) {
+        const x = toPxX(tower.pad.x);
+        const y = toPxY(tower.pad.y);
+        tower.el.style.transform = `translate3d(${x}px, ${y}px, 0px)`;
+        tower.el.style.zIndex = `${100 + tower.pad.y}`;
+      }
+
+      function updateEnemyElement(enemy) {
+        enemy.el.style.transform = `translate3d(${enemy.px}px, ${enemy.py}px, ${enemy.dead ? -10 : 0}px) rotate(${enemy.progress * 25}deg)`;
+        enemy.el.style.zIndex = `${200 + Math.floor(enemy.progress * 10)}`;
+        const hpFill = enemy.el.querySelector('.hpBar > i');
+        if (hpFill) hpFill.style.transform = `scaleX(${clamp(enemy.hp / enemy.maxHp, 0, 1)})`;
+        if (enemy.flash > 0) {
+          enemy.el.querySelector('.body').style.filter = `brightness(${1.2 + enemy.flash * 3})`;
+        } else {
+          enemy.el.querySelector('.body').style.filter = '';
+        }
+        enemy.el.style.opacity = enemy.dead ? '0' : '1';
+      }
+
+      function updateProjectileElement(p) {
+        p.el.style.transform = `translate3d(${p.x}px, ${p.y}px, ${p.z}px)`;
+        p.el.style.zIndex = `${300 + Math.floor(p.y / 4)}`;
+      }
+
+      function updateEffects(dt) {
+        for (let i = state.effects.length - 1; i >= 0; i--) {
+          const fx = state.effects[i];
+          fx.life -= dt;
+          if (fx.vx !== undefined) {
+            fx.x += fx.vx * dt * state.tileSize * 0.85;
+            fx.y += fx.vy * dt * state.tileSize * 0.85;
+          }
+          fx.y += (fx.vy || -0.35) * dt * state.tileSize * 0.6;
+          const alpha = clamp(fx.life / 0.5, 0, 1);
+          fx.el.style.opacity = `${alpha}`;
+          fx.el.style.transform = `translate3d(${fx.x}px, ${fx.y}px, ${fx.z || 0}px) scale(${0.9 + (1 - alpha) * 0.4})`;
+          if (fx.life <= 0) {
+            fx.el.remove();
+            state.effects.splice(i, 1);
+          }
+        }
+      }
+
+      function updateWaveState(dt) {
+        if (!state.running || state.paused || state.over) return;
+
+        if (state.spawnQueue.length > 0) {
+          state.spawnTimer -= dt;
+          if (state.spawnTimer <= 0) {
+            const next = state.spawnQueue.shift();
+            const forcedHpBoost = 1 + (state.wave - 1) * 0.05;
+            spawnEnemy(next.type, 0, 0, forcedHpBoost);
+            state.spawnTimer = state.spawnDelay + rand(0, 0.32);
+          }
+        }
+
+        if (state.waveActive && state.spawnQueue.length === 0 && state.enemies.every(e => e.dead)) {
+          state.waveActive = false;
+          state.intermission = true;
+          state.chain = Math.max(1, state.chain + 0.22);
+          state.bestChain = Math.max(state.bestChain, state.chain);
+          state.currentWaveReward = Math.floor((state.wave * 9 + state.kills * 1.5 + state.merges * 3) * state.chain * state.contract.modifiers.reward);
+          state.gold += Math.floor(state.currentWaveReward * 0.25);
+          state.gold += Math.floor(state.gold * state.mods.interest);
+          state.rerolls += state.contract === contracts[2] ? 1 : 0;
+          state.pendingChoice = pickChoices();
+          state.bankReady = true;
+          cardsEl.classList.add('visible');
+          renderCards();
+          runHintEl.textContent = 'Choose a breakthrough, or cash out to bank the run.';
+          updateUI();
+        }
+
+        if (!state.waveActive && state.intermission && state.pendingChoice) {
+          // keep the UI fresh while the player decides
+        }
+      }
+
+      function updateEnemies(dt) {
+        for (let i = state.enemies.length - 1; i >= 0; i--) {
+          const enemy = state.enemies[i];
+          if (enemy.dead) {
+            enemy.el.style.opacity = `${Math.max(0, parseFloat(enemy.el.style.opacity || '1') - dt * 2.5)}`;
+            if (parseFloat(enemy.el.style.opacity || '0') <= 0.02) {
+              enemy.el.remove();
+              state.enemies.splice(i, 1);
+            }
+            continue;
+          }
+          enemy.flash = Math.max(0, enemy.flash - dt);
+          let remaining = enemy.speed * dt;
+          while (remaining > 0 && enemy.pathIndex < board.path.length - 1) {
+            const a = board.path[enemy.pathIndex];
+            const b = board.path[enemy.pathIndex + 1];
+            const segLen = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]);
+            const distLeft = segLen * (1 - enemy.t);
+            if (remaining < distLeft) {
+              enemy.t += remaining / segLen;
+              remaining = 0;
+            } else {
+              remaining -= distLeft;
+              enemy.pathIndex += 1;
+              enemy.t = 0;
+              if (enemy.pathIndex >= board.path.length - 1) break;
+            }
+          }
+          setEnemyPosition(enemy);
+          if (enemy.pathIndex >= board.path.length - 1 && enemy.t >= 1) {
+            enemy.dead = true;
+            state.hp -= Math.ceil(2 + state.wave * 0.9);
+            spawnFloatText('-HP', enemy.px, enemy.py, 'bad', 8);
+            spawnSpark(enemy.px, enemy.py, '#ff627a');
+            if (state.hp <= 0) {
+              gameOver();
+              return;
+            }
+          }
+          updateEnemyElement(enemy);
+        }
+      }
+
+      function updateTowers(dt) {
+        for (const tower of state.towers) {
+          tower.fire -= dt;
+          updateTowerElement(tower);
+          if (tower.fire <= 0) {
+            const target = nearestEnemyForTower(tower);
+            if (target) fireTower(tower, target);
+          }
+        }
+      }
+
+      function updateProjectiles(dt) {
+        for (let i = state.projectiles.length - 1; i >= 0; i--) {
+          const p = state.projectiles[i];
+          const target = getEnemyById(p.targetId);
+          if (!target) {
+            p.life -= dt;
+            if (p.life <= 0.8) {
+              p.el.remove();
+              state.projectiles.splice(i, 1);
+            }
+            continue;
+          }
+          const dx = target.px - p.x;
+          const dy = target.py - p.y;
+          const dist = Math.hypot(dx, dy);
+          const step = p.speed * dt;
+          if (dist <= Math.max(10, step)) {
+            impactProjectile(p, target);
+            p.el.remove();
+            state.projectiles.splice(i, 1);
+            continue;
+          }
+          const nx = dx / dist;
+          const ny = dy / dist;
+          p.x += nx * step;
+          p.y += ny * step;
+          p.z = 40 + Math.sin((performance.now() / 180) + p.id) * 2;
+          updateProjectileElement(p);
+        }
+      }
+
+      function impactProjectile(p, target) {
+        if (!target || target.dead) return;
+        const sourceTower = p.tower;
+        const type = p.type;
+        if (type === 'cannon') {
+          applyDamage(target, p.damage, sourceTower, type);
+          const radius = state.tileSize * p.splash;
+          for (const other of state.enemies) {
+            if (other.dead || other.id === target.id) continue;
+            if (Math.hypot(other.px - target.px, other.py - target.py) <= radius) {
+              applyDamage(other, p.damage * 0.65, sourceTower, type);
+            }
+          }
+          spawnSpark(target.px, target.py, '#ffbc71');
+        } else if (type === 'prism') {
+          const chainTargets = [target];
+          const seen = new Set([target.id]);
+          let current = target;
+          for (let i = 0; i < p.chain; i++) {
+            applyDamage(current, p.damage * Math.pow(0.82, i), sourceTower, type);
+            let next = null;
+            let bestDist = Infinity;
+            for (const other of state.enemies) {
+              if (other.dead || seen.has(other.id)) continue;
+              const d = Math.hypot(other.px - current.px, other.py - current.py);
+              if (d < state.tileSize * 1.75 && d < bestDist) {
+                bestDist = d;
+                next = other;
+              }
+            }
+            if (!next) break;
+            seen.add(next.id);
+            current = next;
+            chainTargets.push(next);
+          }
+          spawnSpark(target.px, target.py, '#ef8dff');
+        } else {
+          const killed = applyDamage(target, p.damage, sourceTower, type);
+          if (killed && state.mods.boltPierce) {
+            let next = null;
+            let best = Infinity;
+            for (const other of state.enemies) {
+              if (other.dead || other.id === target.id) continue;
+              const d = Math.hypot(other.px - target.px, other.py - target.py);
+              if (d < state.tileSize * 1.35 && d < best) {
+                best = d;
+                next = other;
+              }
+            }
+            if (next) applyDamage(next, p.damage * 0.4, sourceTower, type);
+          }
+          spawnSpark(target.px, target.py, '#86f8ff');
+        }
+      }
+
+      function updateEffectsAndUi(dt) {
+        state.rewardPulse = Math.max(0, state.rewardPulse - dt);
+        updateEffects(dt);
+        waveRewardLabelEl.textContent = state.running ? `Reward ${fmt(state.currentWaveReward)}${state.intermission ? ' ready' : ''}` : `Meta ${fmt(meta.shards)}`;
+        chainStatEl.textContent = `x${fmt1(state.chain)}`;
+        seedLabelEl.textContent = `Seed ${state.seed}`;
+      }
+
+      function gameOver() {
+        if (state.over) return;
+        state.over = true;
+        state.running = false;
+        state.waveActive = false;
+        state.intermission = false;
+        cardsEl.classList.remove('visible');
+        const base = state.wave * 8 + state.merges * 4 + state.kills * 2;
+        const bank = Math.floor(base * 0.5 * state.contract.modifiers.shard * (1 + meta.bankYield));
+        meta.shards += bank;
+        meta.bestWave = Math.max(meta.bestWave, state.wave);
+        saveMeta();
+        endScreenEl.classList.remove('hidden');
+        endTitleEl.textContent = 'Core Breached';
+        endTextEl.textContent = `Your run ended on wave ${state.wave}. The board was scavenged and the remaining echoes were banked.`;
+        endSummaryEl.innerHTML = `
+          Final wave: <strong>${state.wave}</strong><br>
+          Enemies defeated: <strong>${state.kills}</strong><br>
+          Towers fused: <strong>${state.merges}</strong><br>
+          Run shards: <strong>${fmt(state.runShards + bank)}</strong><br>
+          Meta shards total: <strong>${fmt(meta.shards)}</strong><br>
+          Best wave: <strong>${fmt(meta.bestWave)}</strong>
+        `;
+        updateUI();
+      }
+
+      function openMetaFromEnd() {
+        endScreenEl.classList.add('hidden');
+        startScreenEl.classList.remove('hidden');
+        updateMetaPanel();
+      }
+
+      function updateMetaPanel() {
+        bestWaveStatEl.textContent = fmt(meta.bestWave);
+        metaShardStatEl.textContent = fmt(meta.shards);
+        startSeedStatEl.textContent = state.seed;
+      }
+
+      function purchaseUpgrade(type) {
+        const costs = {
+          starterGold: 20 + meta.starterGold * 2,
+          bankYield: 18 + meta.bankYield * 40,
+          mergeDamage: 24 + meta.mergeDamage * 35,
+          rerolls: 16 + meta.rerolls * 22,
+          interest: 28 + meta.interest * 120,
+          discount: 34 + meta.discount * 85,
+        };
+        const upgrades = {
+          starterGold: () => { meta.starterGold += 6; },
+          bankYield: () => { meta.bankYield += 0.05; },
+          mergeDamage: () => { meta.mergeDamage += 0.04; },
+          rerolls: () => { meta.rerolls += 1; },
+          interest: () => { meta.interest += 0.01; },
+          discount: () => { meta.discount += 0.02; },
+        };
+        const cost = Math.ceil(costs[type]);
+        if (meta.shards < cost) return false;
+        meta.shards -= cost;
+        upgrades[type]();
+        saveMeta();
+        renderMetaButtons();
+        updateMetaPanel();
+        return true;
+      }
+
+      function renderMetaButtons() {
+        contractGridEl.innerHTML = '';
+        const upgrades = [
+          ['starterGold', `Starter Gold +6`, `Starts each run with more runway.`],
+          ['bankYield', `Bank Yield +5%`, `Raises cash-out returns.`],
+          ['mergeDamage', `Merge Power +4%`, `Merged towers hit harder.`],
+          ['rerolls', `Reroll +1`, `Adds a reroll at intermissions.`],
+          ['interest', `Interest +1%`, `Rewards saved gold at wave end.`],
+          ['discount', `Shop Discount +2%`, `Lowers tower costs over time.`],
+        ];
+        for (const [id, name, desc] of upgrades) {
+          const cost = Math.ceil({
+            starterGold: 20 + meta.starterGold * 2,
+            bankYield: 18 + meta.bankYield * 40,
+            mergeDamage: 24 + meta.mergeDamage * 35,
+            rerolls: 16 + meta.rerolls * 22,
+            interest: 28 + meta.interest * 120,
+            discount: 34 + meta.discount * 85,
+          }[id]);
+          const el = document.createElement('div');
+          el.className = 'contractCard';
+          el.innerHTML = `
+            <div class="name">${name}</div>
+            <div class="desc">${desc}</div>
+            <div class="stack" style="justify-content:space-between;align-items:center">
+              <span class="bonus">${cost} shards</span>
+              <button class="small primary">Buy</button>
+            </div>
+          `;
+          const btn = el.querySelector('button');
+          btn.addEventListener('click', () => {
+            purchaseUpgrade(id);
+            updateMetaPanel();
+            renderMetaButtons();
+          });
+          contractGridEl.appendChild(el);
+        }
+      }
+
+      function handleKey(e) {
+        if (e.key === '1') { state.selectedType = 'bolt'; syncTowerButtons(); }
+        if (e.key === '2') { state.selectedType = 'cannon'; syncTowerButtons(); }
+        if (e.key === '3') { state.selectedType = 'prism'; syncTowerButtons(); }
+        if (e.key.toLowerCase() === 'p') pauseToggle();
+        if (e.key.toLowerCase() === 's') toggleSellMode();
+        if (e.key === 'Escape') {
+          if (state.intermission) {
+            cashOut(false);
+          } else {
+            pauseToggle();
+          }
+        }
+      }
+
+      function syncTowerButtons() {
+        document.querySelectorAll('#towerButtons button').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.type === state.selectedType);
+        });
+      }
+
+      function toggleSellMode() {
+        state.mode = state.mode === 'sell' ? 'build' : 'sell';
+        syncModeButtons();
+        updateUI();
+      }
+
+      function syncModeButtons() {
+        sellBtn.textContent = state.mode === 'sell' ? 'Building mode' : 'Sell mode';
+      }
+
+      function gameLoop(t) {
+        const dt = clamp((t - state.lastTime) / 1000, 0, 0.033);
+        state.lastTime = t;
+
+        if (state.running && !state.paused && !state.over) {
+          updateWaveState(dt);
+          updateEnemies(dt);
+          updateTowers(dt);
+          updateProjectiles(dt);
+        }
+
+        updateEffectsAndUi(dt);
+        requestAnimationFrame(gameLoop);
+      }
+
+      function initUI() {
+        renderBoard();
+        renderContracts();
+        renderMetaButtons();
+        updateMetaPanel();
+        syncTowerButtons();
+        syncModeButtons();
+        seedLabelEl.textContent = `Seed ${state.seed}`;
+        startSeedStatEl.textContent = state.seed;
+        bestWaveStatEl.textContent = fmt(meta.bestWave);
+        metaShardStatEl.textContent = fmt(meta.shards);
+        waveStatEl.textContent = fmt(state.wave);
+        hpStatEl.textContent = `${fmt(state.hp)}/${fmt(state.maxHp)}`;
+        goldStatEl.textContent = fmt(state.gold);
+        shardStatEl.textContent = fmt(meta.shards);
+        chainStatEl.textContent = `x${fmt1(state.chain)}`;
+        contractStatEl.textContent = 'Contract: --';
+        rerollStatEl.textContent = fmt(state.rerolls);
+        enemyStatEl.textContent = '0';
+        towerStatEl.textContent = '0';
+        mergeStatEl.textContent = '0';
+        waveRewardLabelEl.textContent = 'Meta ' + fmt(meta.shards);
+      }
+
+      startBtn.addEventListener('click', startRun);
+      restartBtn.addEventListener('click', () => {
+        endScreenEl.classList.add('hidden');
+        startRun();
+      });
+      metaBtn.addEventListener('click', () => {
+        openMetaFromEnd();
+      });
+      resetMetaBtn.addEventListener('click', () => {
+        if (!confirm('Reset all meta progression?')) return;
+        meta = { ...defaultMeta };
+        saveMeta();
+        updateMetaPanel();
+        renderMetaButtons();
+      });
+      sellBtn.addEventListener('click', toggleSellMode);
+      rerollBtn.addEventListener('click', rerollChoices);
+      pauseBtn.addEventListener('click', pauseToggle);
+      continueBtn.addEventListener('click', () => {
+        if (!state.running) return;
+        if (state.intermission && state.pendingChoice && !state.chosenPerk) {
+          // allow continue without a perk
+        }
+        state.intermission = false;
+        state.wave += 1;
+        state.chain = Math.min(4.5, state.chain + 0.12);
+        state.bestChain = Math.max(state.bestChain, state.chain);
+        state.gold += Math.floor(state.gold * state.mods.interest);
+        state.currentWaveReward = 0;
+        state.pendingChoice = null;
+        state.chosenPerk = false;
+        cardsEl.classList.remove('visible');
+        prepWave(state.wave);
+        runHintEl.textContent = 'Wave incoming. Build or merge before the next push.';
+        if (state.contract === contracts[1]) {
+          // Fragment Tax: tower prices drift upward slightly each wave.
+          state.mods.mergeValue += 0.25;
+        }
+        updateUI();
+      });
+      bankBtn.addEventListener('click', () => cashOut(false));
+      document.querySelectorAll('#towerButtons button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.selectedType = btn.dataset.type;
+          syncTowerButtons();
+          runHintEl.textContent = `Selected ${towerDefs[state.selectedType].name}. Tap a build pad to place.`;
+        });
+      });
+      document.addEventListener('keydown', handleKey);
+      window.addEventListener('resize', () => {
+        setBoardSize();
+        if (board.tiles.size) {
+          syncBoardLayout();
+        } else {
+          renderBoard();
+        }
+      });
+
+      initUI();
+      setBoardSize();
+      renderBoard();
+      updateUI();
+      requestAnimationFrame(gameLoop);
+    })();
+  </script>
+</body>
+</html>
