@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>MERGE KEEP</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: #08060f;
+    touch-action: none; overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  canvas { display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+  #fallback {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    color: #ddd; background: #08060f; text-align: center; padding: 2em; box-sizing: border-box;
+  }
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  #tray {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    padding: 10px 10px calc(14px + env(safe-area-inset-bottom));
+  }
+  #handSlot {
+    width: 68px; height: 68px; border-radius: 18px; position: relative;
+    background: rgba(22,18,32,0.72); border: 2px solid rgba(255,255,255,0.14);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s ease;
+  }
+  #handGem {
+    width: 30px; height: 30px; transform: rotate(45deg);
+    border-radius: 6px;
+    box-shadow: 0 0 14px 2px var(--gemglow, rgba(255,255,255,0.4));
+    transition: background 0.2s ease;
+  }
+  #handLevel {
+    position: absolute; bottom: 3px; right: 6px; font-size: 11px; font-weight: 700;
+    color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); letter-spacing: 0.5px;
+  }
+  #handName {
+    position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: rgba(255,255,255,0.85); white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+  #hint {
+    position: absolute; left: 0; right: 0; bottom: 96px; text-align: center;
+    color: rgba(255,255,255,0.8); font-size: 14px; text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    transition: opacity 0.6s ease; opacity: 1;
+  }
+  #hint.hidden { opacity: 0; }
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: calc(10px + env(safe-area-inset-top)) 10px 8px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  #goldPill {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    background: rgba(20,16,28,0.72); border: 2px solid rgba(255,255,255,0.14);
+    border-radius: 14px; padding: 0 10px; height: 22px;
+    font-size: 13px; font-weight: 700; color: #ffd863; text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4); white-space: nowrap;
+  }
+  #goldCoin {
+    width: 13px; height: 13px; border-radius: 50%; flex: 0 0 auto;
+    background: radial-gradient(circle at 35% 30%, #fff6c8, #f0b93d 60%, #a9760c);
+    box-shadow: 0 0 6px rgba(240,185,61,0.6);
+  }
+  #hpBarWrap {
+    position: relative; flex: 1 1 auto; min-width: 0; max-width: 340px; height: 22px;
+    background: rgba(20,16,28,0.7); border: 2px solid rgba(255,255,255,0.15);
+    border-radius: 11px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  }
+  #hpBarFill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 100%;
+    background: linear-gradient(90deg,#7d3fd6,#b06be0); transition: width 0.25s ease;
+  }
+  #hpText {
+    position: relative; z-index: 1; text-align: center; line-height: 22px;
+    font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px;
+  }
+  #wavePill {
+    flex: 0 0 auto;
+    background: rgba(20,16,28,0.72); border: 2px solid rgba(255,255,255,0.14);
+    border-radius: 14px; padding: 0 10px; height: 22px; display:flex; align-items:center;
+    font-size: 13px; font-weight: 700; color:#c9b6ff; text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4); white-space: nowrap;
+  }
+  #relicBar {
+    position: absolute; left: 10px; top: calc(38px + env(safe-area-inset-top));
+    display: flex; gap: 6px; pointer-events: auto;
+  }
+  .relicIcon {
+    width: 22px; height: 22px; border-radius: 6px; transform: rotate(45deg);
+    box-shadow: 0 0 8px 1px rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.3);
+  }
+  .modal {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(4,3,9,0.72); pointer-events: auto; z-index: 20; padding: 20px; box-sizing: border-box;
+  }
+  .modal.open { display: flex; }
+  .modalCard {
+    background: linear-gradient(160deg, rgba(36,28,54,0.97), rgba(20,16,32,0.97));
+    border: 1px solid rgba(255,255,255,0.14); border-radius: 20px;
+    padding: 22px; max-width: 480px; width: 100%; max-height: 86vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+  }
+  .modalCard h2 { margin: 0 0 4px; font-size: 20px; color: #fff; text-align: center; }
+  .modalSub { text-align:center; color:rgba(255,255,255,0.55); font-size:12px; margin-bottom:16px; }
+  #relicOptions { display: flex; flex-direction: column; gap: 10px; }
+  .relicCard {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
+    cursor: pointer; transition: background 0.15s, transform 0.15s;
+  }
+  .relicCard:active { transform: scale(0.97); background: rgba(255,255,255,0.12); }
+  .relicCard .gem { width: 30px; height: 30px; min-width:30px; transform: rotate(45deg); border-radius: 7px; box-shadow: 0 0 10px 1px rgba(255,255,255,0.3); }
+  .relicCard .info { flex: 1; }
+  .relicCard .info .rname { font-weight: 700; color: #fff; font-size: 14px; margin-bottom: 2px; }
+  .relicCard .info .rdesc { font-size: 12px; color: rgba(255,255,255,0.65); }
+  .relicCard.rare { border-color: rgba(255,210,90,0.5); }
+  .relicCard.rare .rname { color: #ffd863; }
+  #shopOptions { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .shopBtn {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; width:100%;
+    padding: 12px 16px; border-radius: 14px; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.14); color: #fff; font-size: 14px; cursor: pointer;
+  }
+  .shopBtn:disabled { opacity: 0.4; cursor: default; }
+  .shopBtn .cost { color: #ffd863; font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .primaryBtn {
+    display: block; width: 100%; padding: 14px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg,#7d3fd6,#a568e8); color: #fff; font-size: 16px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 8px 20px rgba(125,63,214,0.4);
+  }
+  .primaryBtn:active { transform: scale(0.98); }
+  .screen {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    z-index: 30; padding: 24px; box-sizing: border-box;
+    background: radial-gradient(ellipse at 50% 30%, rgba(70,45,100,0.4), rgba(4,3,9,0.9) 70%);
+    pointer-events: auto; overflow-y: auto;
+  }
+  .screen.active { display: flex; }
+  .menuPanel { width: 100%; max-width: 420px; text-align: center; display: flex; flex-direction: column; gap: 10px; margin: auto; }
+  .menuPanel.wide { max-width: 520px; }
+  .gameTitle {
+    font-size: 42px; margin: 0; font-weight: 800; letter-spacing: 2px;
+    background: linear-gradient(135deg,#b06be0,#ffd863);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 24px rgba(176,107,224,0.45));
+  }
+  .menuSub { color: rgba(255,255,255,0.55); margin-bottom: 8px; font-size: 14px; }
+  .menuStats { display: flex; justify-content: center; gap: 24px; margin: 10px 0 18px; }
+  .menuStats > div { display: flex; flex-direction: column; }
+  .statLabel { font-size: 11px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
+  .statValue { font-size: 22px; font-weight: 800; color: #ffd863; }
+  .secondaryBtn {
+    display: block; width: 100%; padding: 13px; border-radius: 14px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
+    color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  .secondaryBtn:active { transform: scale(0.98); background: rgba(255,255,255,0.14); }
+  .ghostBtn {
+    display: block; width: 100%; padding: 10px; border-radius: 14px; margin-top: 6px;
+    background: transparent; border: none; color: rgba(255,255,255,0.35); font-size: 12px; cursor: pointer;
+  }
+  .screen h2 { color: #fff; margin: 0 0 4px; }
+  .howToText { text-align: left; color: rgba(255,255,255,0.8); font-size: 14px; line-height: 1.6; margin: 14px 0; }
+  .howToText p { margin: 0 0 10px; }
+  .newBestBadge {
+    background: linear-gradient(135deg,#ffd863,#ff9f4a); color:#3a2200; font-weight:800; font-size:13px;
+    padding: 6px 14px; border-radius: 20px; display:inline-block; margin: 0 auto 6px; letter-spacing:0.5px;
+  }
+  .newBestBadge.hidden { display: none; }
+  #sanctumList { display:flex; flex-direction:column; gap:10px; max-height:48vh; overflow-y:auto; margin:14px 0; text-align:left; }
+  .sanctumRow { display:flex; align-items:center; justify-content:space-between; gap:10px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); border-radius:14px; padding:12px 14px; }
+  .sName { font-weight:700; color:#fff; font-size:14px; }
+  .sLevel { font-weight:600; color:#c9b6ff; font-size:11px; margin-left:6px; }
+  .sDesc { font-size:12px; color:rgba(255,255,255,0.6); margin-top:2px; }
+  .buyBtn { flex:0 0 auto; padding:9px 14px; border-radius:12px; border:1px solid rgba(255,210,99,0.4); background:rgba(255,210,99,0.12); color:#ffd863; font-weight:700; font-size:13px; cursor:pointer; }
+  .buyBtn:disabled { opacity:0.35; cursor:default; }
+  @media (max-height: 480px) {
+    .screen { padding: 12px; align-items: flex-start; }
+    .menuPanel { gap: 6px; padding-top: 8px; }
+    .gameTitle { font-size: 26px; }
+    .menuSub { margin-bottom: 2px; font-size: 12px; }
+    .menuStats { margin: 4px 0 8px; }
+    .statValue { font-size: 18px; }
+    .secondaryBtn, .primaryBtn { padding: 9px; font-size: 14px; }
+    .ghostBtn { margin-top: 2px; padding: 6px; }
+    .howToText { font-size: 12px; line-height: 1.4; margin: 8px 0; }
+    .howToText p { margin: 0 0 6px; }
+  }
+  #dmgLayer { position: fixed; inset: 0; pointer-events: none; z-index: 15; overflow: hidden; }
+  .dmgNum {
+    position: absolute; transform: translate(-50%,-50%); font-weight: 800; font-size: 15px; color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8); transition: transform 0.85s cubic-bezier(.2,.8,.3,1), opacity 0.85s ease;
+    white-space: nowrap; opacity: 1;
+  }
+  .dmgNum.crit { color: #ffd863; font-size: 21px; }
+  .dmgNum.heal { color: #7dffb0; }
+  #banner {
+    position: fixed; top: 28%; left: 50%; transform: translate(-50%,-50%) scale(0.8);
+    font-size: 26px; font-weight: 900; color: #fff; text-shadow: 0 4px 20px rgba(0,0,0,0.7);
+    pointer-events: none; z-index: 25; opacity: 0; transition: all 0.4s cubic-bezier(.2,.8,.3,1);
+    text-align: center; letter-spacing: 1px; width: 100%; box-sizing: border-box; padding: 0 20px;
+  }
+  #banner.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="dmgLayer"></div>
+<div id="banner"></div>
+<div id="hud">
+  <div id="topbar">
+    <div id="goldPill"><div id="goldCoin"></div><span id="goldText">0</span></div>
+    <div id="hpBarWrap"><div id="hpBarFill"></div><div id="hpText"></div></div>
+    <div id="wavePill">Wave 0</div>
+  </div>
+  <div id="relicBar"></div>
+  <div id="hint">Tap a glowing tile to build</div>
+  <div id="tray">
+    <div id="handSlot"><div id="handName"></div><div id="handGem"></div><div id="handLevel"></div></div>
+  </div>
+</div>
+<div id="screenMainMenu" class="screen active">
+  <div class="menuPanel">
+    <h1 class="gameTitle">MERGE KEEP</h1>
+    <div class="menuSub">Defend. Merge. Ascend.</div>
+    <div class="menuStats">
+      <div><span class="statLabel">Best Wave</span><span class="statValue" id="menuBestWave">0</span></div>
+      <div><span class="statLabel">Essence</span><span class="statValue" id="menuEssence">0</span></div>
+    </div>
+    <button class="primaryBtn menuBtn" id="btnStartRun">Start Run</button>
+    <button class="secondaryBtn menuBtn" id="btnDaily">Daily Challenge</button>
+    <button class="secondaryBtn menuBtn" id="btnSanctum">Sanctum</button>
+    <button class="secondaryBtn menuBtn" id="btnHowTo">How to Play</button>
+    <button class="ghostBtn menuBtn" id="btnReset">Reset Progress</button>
+  </div>
+</div>
+<div id="screenSanctum" class="screen">
+  <div class="menuPanel wide">
+    <h2>Sanctum</h2>
+    <div class="modalSub">Essence: <span id="sanctumEssence">0</span></div>
+    <div id="sanctumList"></div>
+    <button class="primaryBtn menuBtn" id="btnSanctumBack">Back</button>
+  </div>
+</div>
+<div id="screenHowTo" class="screen">
+  <div class="menuPanel">
+    <h2>How to Play</h2>
+    <div class="howToText">
+      <p><b>Tap</b> a glowing open tile to build the tower currently in your hand.</p>
+      <p><b>Drag</b> a tower onto another of the same type &amp; level to merge it into something stronger.</p>
+      <p>Defend the Keep as waves march down the path. Between waves, choose a Blessing and spend gold at the shop.</p>
+      <p>When the Keep falls, the Essence you earned stays forever — spend it in the Sanctum to grow stronger for your next run.</p>
+    </div>
+    <button class="primaryBtn menuBtn" id="btnHowToBack">Back</button>
+  </div>
+</div>
+<div id="screenSummary" class="screen">
+  <div class="menuPanel">
+    <h2 id="summaryTitle">Keep Fallen</h2>
+    <div id="summaryNewBest" class="newBestBadge hidden">NEW BEST!</div>
+    <div class="menuStats">
+      <div><span class="statLabel">Wave Reached</span><span class="statValue" id="summaryWave">0</span></div>
+      <div><span class="statLabel">Gold Earned</span><span class="statValue" id="summaryGold">0</span></div>
+      <div><span class="statLabel">Essence Gained</span><span class="statValue" id="summaryEssence">0</span></div>
+    </div>
+    <button class="primaryBtn menuBtn" id="btnPlayAgain">Play Again</button>
+    <button class="secondaryBtn menuBtn" id="btnSummaryMenu">Main Menu</button>
+  </div>
+</div>
+<div id="relicModal" class="modal">
+  <div class="modalCard">
+    <h2>Choose a Blessing</h2>
+    <div class="modalSub">Pick one to empower your Keep this run</div>
+    <div id="relicOptions"></div>
+  </div>
+</div>
+<div id="shopModal" class="modal">
+  <div class="modalCard">
+    <h2 id="shopTitle">Wave Cleared</h2>
+    <div class="modalSub" id="shopSub">Spend gold before the next wave</div>
+    <div id="shopOptions"></div>
+    <button id="continueBtn" class="primaryBtn">Begin Next Wave</button>
+  </div>
+</div>
+<div id="fallback"><div>Your browser/device does not support WebGL, which this game requires.</div></div>
+<script>
+(function(){
+"use strict";
+
+// ===================== vec3 / mat4 math =====================
+function sub3(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function add3(a,b){return [a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
+function scale3(a,s){return [a[0]*s,a[1]*s,a[2]*s];}
+function cross3(a,b){return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];}
+function dot3(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+function length3(a){return Math.sqrt(dot3(a,a));}
+function normalize3(a){const l=length3(a)||1;return [a[0]/l,a[1]/l,a[2]/l];}
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp(v,lo,hi){return v<lo?lo:(v>hi?hi:v);}
+
+function mat4Perspective(out, fovy, aspect, near, far) {
+  const f = 1/Math.tan(fovy/2);
+  out[0]=f/aspect; out[1]=0; out[2]=0; out[3]=0;
+  out[4]=0; out[5]=f; out[6]=0; out[7]=0;
+  out[8]=0; out[9]=0; out[10]=(far+near)/(near-far); out[11]=-1;
+  out[12]=0; out[13]=0; out[14]=(2*far*near)/(near-far); out[15]=0;
+  return out;
+}
+function mat4LookAt(out, eye, center, up) {
+  const z = normalize3(sub3(eye,center));
+  const x = normalize3(cross3(up,z));
+  const y = cross3(z,x);
+  out[0]=x[0]; out[1]=y[0]; out[2]=z[0]; out[3]=0;
+  out[4]=x[1]; out[5]=y[1]; out[6]=z[1]; out[7]=0;
+  out[8]=x[2]; out[9]=y[2]; out[10]=z[2]; out[11]=0;
+  out[12]=-dot3(x,eye); out[13]=-dot3(y,eye); out[14]=-dot3(z,eye); out[15]=1;
+  return out;
+}
+function mat4Multiply(out,a,b) {
+  const a00=a[0],a01=a[1],a02=a[2],a03=a[3],
+        a10=a[4],a11=a[5],a12=a[6],a13=a[7],
+        a20=a[8],a21=a[9],a22=a[10],a23=a[11],
+        a30=a[12],a31=a[13],a32=a[14],a33=a[15];
+  for (let i=0;i<4;i++){
+    const b0=b[i*4],b1=b[i*4+1],b2=b[i*4+2],b3=b[i*4+3];
+    out[i*4]  = b0*a00+b1*a10+b2*a20+b3*a30;
+    out[i*4+1]= b0*a01+b1*a11+b2*a21+b3*a31;
+    out[i*4+2]= b0*a02+b1*a12+b2*a22+b3*a32;
+    out[i*4+3]= b0*a03+b1*a13+b2*a23+b3*a33;
+  }
+  return out;
+}
+function mat4FromPosScale(out, px,py,pz, sx,sy,sz) {
+  out[0]=sx;out[1]=0;out[2]=0;out[3]=0;
+  out[4]=0;out[5]=sy;out[6]=0;out[7]=0;
+  out[8]=0;out[9]=0;out[10]=sz;out[11]=0;
+  out[12]=px;out[13]=py;out[14]=pz;out[15]=1;
+  return out;
+}
+function mat4FromTRS(out, px,py,pz, rotY, sx,sy,sz) {
+  const c=Math.cos(rotY), s=Math.sin(rotY);
+  out[0]=c*sx; out[1]=0; out[2]=-s*sx; out[3]=0;
+  out[4]=0; out[5]=sy; out[6]=0; out[7]=0;
+  out[8]=s*sz; out[9]=0; out[10]=c*sz; out[11]=0;
+  out[12]=px; out[13]=py; out[14]=pz; out[15]=1;
+  return out;
+}
+
+// ===================== procedural low-poly geometry =====================
+// Flat-shaded meshes with explicit/auto-corrected outward normals (no backface
+// culling is enabled anywhere, so winding order never matters here - only the
+// sign of the normal does, which the auto-correction below guarantees).
+function buildCube() {
+  const positions=[], normals=[], indices=[];
+  function face(p0,p1,p2,p3,n) {
+    const start = positions.length/3;
+    for (const p of [p0,p1,p2,p3]) { positions.push(p[0],p[1],p[2]); normals.push(n[0],n[1],n[2]); }
+    indices.push(start,start+1,start+2, start,start+2,start+3);
+  }
+  face([.5,-.5,-.5],[.5,.5,-.5],[.5,.5,.5],[.5,-.5,.5], [1,0,0]);
+  face([-.5,-.5,.5],[-.5,.5,.5],[-.5,.5,-.5],[-.5,-.5,-.5], [-1,0,0]);
+  face([-.5,.5,-.5],[-.5,.5,.5],[.5,.5,.5],[.5,.5,-.5], [0,1,0]);
+  face([-.5,-.5,.5],[-.5,-.5,-.5],[.5,-.5,-.5],[.5,-.5,.5], [0,-1,0]);
+  face([-.5,-.5,.5],[.5,-.5,.5],[.5,.5,.5],[-.5,.5,.5], [0,0,1]);
+  face([.5,-.5,-.5],[-.5,-.5,-.5],[-.5,.5,-.5],[.5,.5,-.5], [0,0,-1]);
+  return {positions,normals,indices};
+}
+function buildCone(sides, radius, height) {
+  const positions=[], normals=[], indices=[];
+  function pushTri(a,b,c,fixedNormal) {
+    const start = positions.length/3;
+    let n;
+    if (fixedNormal) n = fixedNormal;
+    else {
+      n = normalize3(cross3(sub3(b,a), sub3(c,a)));
+      const mid = [(a[0]+b[0]+c[0])/3,(a[1]+b[1]+c[1])/3,(a[2]+b[2]+c[2])/3];
+      if (n[0]*mid[0]+n[2]*mid[2] < 0) n = [-n[0],-n[1],-n[2]];
+    }
+    for (const p of [a,b,c]) { positions.push(p[0],p[1],p[2]); normals.push(n[0],n[1],n[2]); }
+    indices.push(start,start+1,start+2);
+  }
+  const apex=[0,height,0];
+  const ring=[];
+  for (let i=0;i<sides;i++){ const a=i/sides*Math.PI*2; ring.push([Math.cos(a)*radius,0,Math.sin(a)*radius]); }
+  for (let i=0;i<sides;i++){ pushTri(apex,ring[i],ring[(i+1)%sides],null); }
+  for (let i=0;i<sides;i++){ pushTri([0,0,0],ring[(i+1)%sides],ring[i],[0,-1,0]); }
+  return {positions,normals,indices};
+}
+function buildOctahedron() {
+  const positions=[], normals=[], indices=[];
+  function pushTri(a,b,c) {
+    const start = positions.length/3;
+    let n = normalize3(cross3(sub3(b,a), sub3(c,a)));
+    const cx=(a[0]+b[0]+c[0])/3, cy=(a[1]+b[1]+c[1])/3, cz=(a[2]+b[2]+c[2])/3;
+    if (n[0]*cx+n[1]*cy+n[2]*cz < 0) n=[-n[0],-n[1],-n[2]];
+    for (const p of [a,b,c]) { positions.push(p[0],p[1],p[2]); normals.push(n[0],n[1],n[2]); }
+    indices.push(start,start+1,start+2);
+  }
+  const xs=[[1,0,0],[-1,0,0]], ys=[[0,1,0],[0,-1,0]], zs=[[0,0,1],[0,0,-1]];
+  for (const x of xs) for (const y of ys) for (const z of zs) pushTri(x,y,z);
+  return {positions,normals,indices};
+}
+
+// ===================== WebGL setup =====================
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl', {antialias:true, alpha:false, powerPreference:'high-performance'}) ||
+           canvas.getContext('experimental-webgl');
+if (!gl) {
+  document.getElementById('fallback').style.display = 'flex';
+  return;
+}
+
+const VS = `
+attribute vec3 aPosition;
+attribute vec3 aNormal;
+uniform mat4 uModel;
+uniform mat4 uViewProj;
+uniform mat3 uNormalMatrix;
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+void main() {
+  vec4 world = uModel * vec4(aPosition, 1.0);
+  vWorldPos = world.xyz;
+  vNormal = uNormalMatrix * aNormal;
+  gl_Position = uViewProj * world;
+}`;
+const FS = `
+precision mediump float;
+varying vec3 vNormal;
+varying vec3 vWorldPos;
+uniform vec3 uColor;
+uniform float uAlpha;
+uniform vec3 uLightDir;
+uniform vec3 uCameraPos;
+uniform vec3 uFogColor;
+uniform float uFogNear;
+uniform float uFogFar;
+void main() {
+  vec3 N = normalize(vNormal);
+  float diff = max(dot(N, -uLightDir), 0.0);
+  float ambient = 0.48;
+  vec3 base = uColor * (ambient + diff*0.62);
+  vec3 V = normalize(uCameraPos - vWorldPos);
+  float rim = pow(1.0 - max(dot(N,V), 0.0), 2.5) * 0.22;
+  vec3 color = base + rim;
+  float fogDist = length(uCameraPos - vWorldPos);
+  float fogFactor = clamp((fogDist - uFogNear)/(uFogFar - uFogNear), 0.0, 1.0);
+  color = mix(color, uFogColor, fogFactor);
+  gl_FragColor = vec4(color, uAlpha);
+}`;
+
+function compileShader(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    const info = gl.getShaderInfoLog(s);
+    gl.deleteShader(s);
+    throw new Error('Shader compile error: '+info);
+  }
+  return s;
+}
+function createProgram(vsSrc, fsSrc) {
+  const vs = compileShader(gl.VERTEX_SHADER, vsSrc);
+  const fs = compileShader(gl.FRAGMENT_SHADER, fsSrc);
+  const p = gl.createProgram();
+  gl.attachShader(p, vs); gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    throw new Error('Program link error: '+gl.getProgramInfoLog(p));
+  }
+  return p;
+}
+const prog = createProgram(VS, FS);
+gl.useProgram(prog);
+const loc = {
+  aPosition: gl.getAttribLocation(prog,'aPosition'),
+  aNormal: gl.getAttribLocation(prog,'aNormal'),
+  uModel: gl.getUniformLocation(prog,'uModel'),
+  uViewProj: gl.getUniformLocation(prog,'uViewProj'),
+  uNormalMatrix: gl.getUniformLocation(prog,'uNormalMatrix'),
+  uColor: gl.getUniformLocation(prog,'uColor'),
+  uAlpha: gl.getUniformLocation(prog,'uAlpha'),
+  uLightDir: gl.getUniformLocation(prog,'uLightDir'),
+  uCameraPos: gl.getUniformLocation(prog,'uCameraPos'),
+  uFogColor: gl.getUniformLocation(prog,'uFogColor'),
+  uFogNear: gl.getUniformLocation(prog,'uFogNear'),
+  uFogFar: gl.getUniformLocation(prog,'uFogFar'),
+};
+gl.enableVertexAttribArray(loc.aPosition);
+gl.enableVertexAttribArray(loc.aNormal);
+gl.enable(gl.DEPTH_TEST);
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+gl.clearColor(0.035,0.03,0.06,1);
+
+function createMesh(geo) {
+  const posBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geo.positions), gl.STATIC_DRAW);
+  const normBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geo.normals), gl.STATIC_DRAW);
+  const idxBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(geo.indices), gl.STATIC_DRAW);
+  return {posBuf, normBuf, idxBuf, count: geo.indices.length};
+}
+const _nm = new Float32Array(9);
+function normalMat3FromMat4(m) {
+  _nm[0]=m[0];_nm[1]=m[1];_nm[2]=m[2];
+  _nm[3]=m[4];_nm[4]=m[5];_nm[5]=m[6];
+  _nm[6]=m[8];_nm[7]=m[9];_nm[8]=m[10];
+  return _nm;
+}
+function drawMesh(mesh, modelMat, color, alpha) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, mesh.posBuf);
+  gl.vertexAttribPointer(loc.aPosition, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normBuf);
+  gl.vertexAttribPointer(loc.aNormal, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.idxBuf);
+  gl.uniformMatrix4fv(loc.uModel, false, modelMat);
+  gl.uniformMatrix3fv(loc.uNormalMatrix, false, normalMat3FromMat4(modelMat));
+  gl.uniform3fv(loc.uColor, color);
+  gl.uniform1f(loc.uAlpha, alpha===undefined?1:alpha);
+  gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_SHORT, 0);
+}
+
+const cubeMesh = createMesh(buildCube());
+const coneMesh = createMesh(buildCone(6, 0.5, 1));
+const octMesh = createMesh(buildOctahedron());
+
+// ===================== grid & path =====================
+const COLS=9, ROWS=9, KEEP_COL=4, CELL=1.12;
+function buildPath(cols, rows, keepCol) {
+  const path = [];
+  let dir = 1;
+  for (let row=0; row<rows; row+=2) {
+    const isLast = row === rows-1;
+    const endCol = isLast ? keepCol : (dir===1 ? cols-1 : 0);
+    if (dir===1) { for (let c=0;c<=endCol;c++) path.push([c,row]); }
+    else { for (let c=cols-1;c>=endCol;c--) path.push([c,row]); }
+    if (!isLast) {
+      const connCol = dir===1 ? cols-1 : 0;
+      path.push([connCol, row+1]);
+      dir *= -1;
+    }
+  }
+  return path;
+}
+const pathList = buildPath(COLS,ROWS,KEEP_COL);
+const pathSet = new Set(pathList.map(p=>p[0]+','+p[1]));
+const keepCell = pathList[pathList.length-1];
+function cellWorld(col,row) {
+  return [ (col-(COLS-1)/2)*CELL, 0, (row-(ROWS-1)/2)*CELL ];
+}
+const cells = [];
+for (let row=0; row<ROWS; row++) for (let col=0; col<COLS; col++) {
+  let role = 'buildable';
+  if (col===keepCell[0] && row===keepCell[1]) role = 'keep';
+  else if (pathSet.has(col+','+row)) role = 'path';
+  cells.push({col,row,role,tower:null});
+}
+function getCellAt(col,row) {
+  if (col<0||col>=COLS||row<0||row>=ROWS) return null;
+  return cells[row*COLS+col];
+}
+
+// ===================== tower data =====================
+const TOWER_TYPES = {
+  fire:      { name:'Ember',   color:[0.95,0.40,0.18], gem:[1.00,0.55,0.25], dmg:9,  range:2.35, atkSpeed:0.9,  splash:0.9 },
+  frost:     { name:'Glacies', color:[0.30,0.70,0.95], gem:[0.55,0.90,1.00], dmg:5,  range:2.5,  atkSpeed:1.0,  slowPct:0.5, slowDur:1.4 },
+  lightning: { name:'Volt',    color:[0.75,0.45,0.95], gem:[0.90,0.70,1.00], dmg:6,  range:2.6,  atkSpeed:1.15, chain:3 },
+  arcane:    { name:'Arcane',  color:[0.35,0.85,0.55], gem:[0.60,1.00,0.75], dmg:16, range:2.2,  atkSpeed:0.55, pierce:true },
+};
+const TOWER_ORDER = ['fire','frost','lightning','arcane'];
+
+// ===================== relics =====================
+const RELICS = [
+  { id:'dmg1', name:'Whetstone', desc:'+15% tower damage', gem:[0.95,0.55,0.35], apply:()=>{state.mods.dmgMult*=1.15;} },
+  { id:'gold1', name:"Midas' Touch", desc:'+25% gold from kills', gem:[1.0,0.85,0.3], apply:()=>{state.mods.goldMult*=1.25;} },
+  { id:'range1', name:'Eagle Eye', desc:'+0.5 range, all towers', gem:[0.5,0.9,0.65], apply:()=>{state.mods.rangeBonus+=0.5;} },
+  { id:'mergeheal', name:'Harmonic Core', desc:'Merging heals the Keep for 3', gem:[0.75,0.55,1.0], apply:()=>{state.mods.mergeHealAmt+=3;} },
+  { id:'freemerge', name:'Lucky Alloy', desc:'12% chance a merge keeps its source tower', gem:[0.9,0.8,0.5], apply:()=>{state.mods.freeChance+=0.12;} },
+  { id:'startlvl2', name:"Artisan's Blessing", desc:'New towers start at level 2', rare:true, unique:true, gem:[1.0,0.9,0.4], apply:()=>{state.mods.startLevel=2;} },
+  { id:'atkspeed1', name:'Swift Wind', desc:'+20% attack speed', gem:[0.55,0.95,0.85], apply:()=>{state.mods.atkSpeedMult*=1.2;} },
+  { id:'crit1', name:"Assassin's Mark", desc:'15% chance to deal 2.5x damage', rare:true, gem:[0.9,0.3,0.4], apply:()=>{state.mods.critChance+=0.15;} },
+  { id:'keephp', name:'Reinforced Walls', desc:'+25 max Keep HP, heal to full', gem:[0.6,0.5,0.9], apply:()=>{state.keepMaxHp+=25; state.keepHp+=25; updateHpUI();} },
+  { id:'bulwark', name:'Bulwark', desc:'Keep takes 15% less damage', gem:[0.5,0.55,0.95], apply:()=>{state.mods.damageTakenMult*=0.85;} },
+  { id:'vamp', name:'Vampiric Core', desc:'Keep heals 1 HP per kill', gem:[0.85,0.25,0.5], apply:()=>{state.mods.healPerKill+=1;} },
+  { id:'overcharge', name:'Overcharge', desc:'+30% attack speed, -0.3 range', gem:[0.95,0.6,0.2], apply:()=>{state.mods.atkSpeedMult*=1.3; state.mods.rangeBonus-=0.3;} },
+  { id:'firesplash', name:'Wildfire', desc:'Fire splash radius +50%', gem:[1.0,0.5,0.2], apply:()=>{state.mods.fireSplashMult*=1.5;} },
+  { id:'frostslow', name:'Deep Freeze', desc:'Frost slow effect +20%', gem:[0.4,0.85,1.0], apply:()=>{state.mods.frostSlowBonus+=0.2;} },
+  { id:'lightningchain', name:'Storm Caller', desc:'Lightning chains to +1 more enemy', gem:[0.8,0.5,1.0], apply:()=>{state.mods.lightningChainBonus+=1;} },
+  { id:'gold2', name:"Prospector's Luck", desc:'+3 gold per wave cleared', gem:[1.0,0.78,0.35], apply:()=>{state.mods.waveGoldBonus+=3;} },
+];
+
+// ===================== enemy data =====================
+const ENEMY_TYPES = {
+  grunt:  { name:'Grunt',    hp:20,  speed:1.15, color:[0.75,0.25,0.25], value:3,  dmgToKeep:6,  bodyW:0.50, bodyH:0.50, bodyD:0.50 },
+  runner: { name:'Runner',  hp:11,  speed:1.9,  color:[0.85,0.75,0.2],  value:3,  dmgToKeep:4,  bodyW:0.42, bodyH:0.38, bodyD:0.62 },
+  tank:   { name:'Tank',    hp:75,  speed:0.62, color:[0.45,0.32,0.55], value:6,  dmgToKeep:14, bodyW:0.72, bodyH:0.68, bodyD:0.72 },
+  shield: { name:'Bulwark', hp:22,  speed:0.85, color:[0.4,0.45,0.85],  value:5,  dmgToKeep:8,  bodyW:0.55, bodyH:0.55, bodyD:0.55, shield:18 },
+  boss:   { name:'Colossus',hp:260, speed:0.5,  color:[0.85,0.15,0.55], value:40, dmgToKeep:25, bodyW:1.0,  bodyH:1.05, bodyD:1.0,  splitOnDeath:true },
+  shard:  { name:'Shard',   hp:14,  speed:1.3,  color:[0.85,0.35,0.65], value:2,  dmgToKeep:4,  bodyW:0.36, bodyH:0.36, bodyD:0.36 },
+};
+const SPAWN_INTERVAL = 0.8;
+
+// ===================== meta progression (persisted) =====================
+const SANCTUM_UPGRADES = [
+  { id:'startHp', name:'Fortified Foundations', desc:'+15 starting max Keep HP', baseCost:20, costMult:1.55, maxLevel:8 },
+  { id:'startGold', name:"Merchant's Ledger", desc:'+15 starting gold', baseCost:15, costMult:1.5, maxLevel:6 },
+  { id:'unlockLightning', name:'Unlock: Volt Tower', desc:'Chains lightning between foes', baseCost:40, costMult:1, maxLevel:1 },
+  { id:'unlockArcane', name:'Unlock: Arcane Tower', desc:'High single-target damage', baseCost:70, costMult:1, maxLevel:1 },
+  { id:'overmerge', name:'Overmerge Ritual', desc:'Raise max tower level to 7', baseCost:120, costMult:1, maxLevel:1 },
+  { id:'rareOdds', name:"Fortune's Favor", desc:'+chance for rare blessings', baseCost:35, costMult:1.6, maxLevel:5 },
+  { id:'essenceGain', name:'Arcane Conduits', desc:'+10% Essence earned per run', baseCost:30, costMult:1.7, maxLevel:6 },
+];
+const SAVE_KEY = 'mergekeep_save_v1';
+function defaultSave() { return { essence:0, bestWave:0, dailyBest:{}, sanctum:{} }; }
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return defaultSave();
+    return Object.assign(defaultSave(), JSON.parse(raw));
+  } catch(e) { return defaultSave(); }
+}
+function persistSave() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch(e) {}
+}
+let save = loadSave();
+function sanctumLevel(id) { return save.sanctum[id] || 0; }
+function sanctumCost(upg) { return Math.round(upg.baseCost * Math.pow(upg.costMult, sanctumLevel(upg.id))); }
+function buySanctumUpgrade(upg) {
+  const cost = sanctumCost(upg);
+  if (save.essence < cost || sanctumLevel(upg.id) >= upg.maxLevel) return;
+  save.essence -= cost;
+  save.sanctum[upg.id] = sanctumLevel(upg.id) + 1;
+  persistSave();
+  renderSanctum();
+}
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(str) {
+  let h = 1779033703 ^ str.length;
+  for (let i=0;i<str.length;i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return (h>>>0);
+}
+
+// ===================== audio =====================
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e) { return null; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq, duration, opts) {
+  opts = opts || {};
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = opts.type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  if (opts.freqEnd) osc.frequency.exponentialRampToValueAtTime(Math.max(1,opts.freqEnd), t0+duration);
+  const vol = opts.volume!==undefined ? opts.volume : 0.18;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.linearRampToValueAtTime(vol, t0+0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0+duration);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0+duration+0.02);
+}
+function sfxPlace() { playTone(220, 0.12, {type:'sine', volume:0.15}); }
+function sfxMerge(level) { playTone(440+level*40, 0.18, {type:'triangle', freqEnd:880+level*40, volume:0.22}); }
+function sfxShoot(type) {
+  const freqs = {fire:180, frost:520, lightning:700, arcane:140};
+  playTone(freqs[type]||300, 0.07, {type:'square', volume:0.05, freqEnd:(freqs[type]||300)*0.6});
+}
+function sfxHit() { playTone(120, 0.08, {type:'sawtooth', volume:0.05, freqEnd:55}); }
+function sfxKeepHit() { playTone(85, 0.32, {type:'sine', volume:0.22, freqEnd:35}); }
+function sfxWaveClear() {
+  playTone(523,0.12,{type:'triangle',volume:0.18});
+  setTimeout(()=>playTone(659,0.12,{type:'triangle',volume:0.18}),110);
+  setTimeout(()=>playTone(784,0.22,{type:'triangle',volume:0.2}),220);
+}
+function sfxGameOver() { playTone(220,0.9,{type:'sine',freqEnd:60,volume:0.22}); }
+function sfxRelicPick() { playTone(660,0.15,{type:'sine',volume:0.15}); setTimeout(()=>playTone(880,0.2,{type:'sine',volume:0.15}),90); }
+function sfxButton() { playTone(300,0.05,{type:'square',volume:0.05}); }
+document.addEventListener('pointerup', (e) => {
+  if (e.target.closest && e.target.closest('.primaryBtn,.secondaryBtn,.buyBtn,.relicCard,.shopBtn')) sfxButton();
+});
+
+// ===================== run-time state =====================
+let rngFunc = Math.random;
+function rng(){ return rngFunc(); }
+const state = {
+  unlockedTowers: ['fire','frost','lightning','arcane'],
+  hand: null,
+  maxLevel: 5,
+  keepHp: 100, keepMaxHp: 100,
+  enemies: [], spawnQueue: [], spawnTimer: 0, waveActive: false,
+  gameOver: false,
+  gold: 0,
+  projectiles: [],
+  wave: 0,
+  relics: [],
+  paused: false,
+  screen: 'mainMenu',
+  isDaily: false,
+  dailySeedStr: '',
+  rareBonus: 0,
+  particles: [],
+  shake: 0,
+  keepHpAtWaveStart: 100,
+  mods: {
+    dmgMult:1, goldMult:1, rangeBonus:0, atkSpeedMult:1, mergeHealAmt:0, freeChance:0,
+    critChance:0, critMult:2.5, startLevel:1, damageTakenMult:1, healPerKill:0,
+    fireSplashMult:1, frostSlowBonus:0, lightningChainBonus:0, waveGoldBonus:0,
+  },
+};
+const CHAIN_RANGE = 2.4;
+function towerDamage(tower) { return TOWER_TYPES[tower.type].dmg * Math.pow(1.55, tower.level-1) * state.mods.dmgMult; }
+function towerRange(tower) { return TOWER_TYPES[tower.type].range + (tower.level-1)*0.16 + state.mods.rangeBonus; }
+function towerAtkSpeed(tower) { return TOWER_TYPES[tower.type].atkSpeed * Math.pow(1.07, tower.level-1) * state.mods.atkSpeedMult; }
+function rollHandPiece() {
+  const pool = state.unlockedTowers;
+  const type = pool[Math.floor(rng()*pool.length)];
+  return { type, level:state.mods.startLevel };
+}
+function placeTower(cell, piece) {
+  cell.tower = { type:piece.type, level:piece.level, col:cell.col, row:cell.row };
+  sfxPlace();
+}
+
+function spawnEnemy(typeKey) {
+  const def = ENEMY_TYPES[typeKey];
+  const waveMult = 1 + Math.max(0,state.wave-1)*0.12;
+  const hp = Math.round(def.hp * waveMult);
+  return { type:typeKey, hp, maxHp:hp, pathT:0, spawnBob: rng()*10, slowFactor:0, slowTimer:0, shield: Math.round((def.shield||0)*waveMult) };
+}
+function enemyWorldPos(e) {
+  const last = pathList.length-1;
+  const i0 = Math.min(Math.floor(e.pathT), last);
+  const i1 = Math.min(i0+1, last);
+  const frac = e.pathT - i0;
+  const w0 = cellWorld(pathList[i0][0], pathList[i0][1]);
+  const w1 = cellWorld(pathList[i1][0], pathList[i1][1]);
+  return [ lerp(w0[0],w1[0],frac), 0, lerp(w0[2],w1[2],frac) ];
+}
+function startWave(composition) {
+  state.spawnQueue = composition.slice();
+  state.waveActive = true;
+  state.spawnTimer = 0;
+}
+function updateWave(dt) {
+  if (!state.waveActive) return;
+  state.spawnTimer -= dt;
+  if (state.spawnTimer <= 0 && state.spawnQueue.length) {
+    const typeKey = state.spawnQueue.shift();
+    state.enemies.push(spawnEnemy(typeKey));
+    state.spawnTimer = SPAWN_INTERVAL;
+  }
+  if (!state.spawnQueue.length && state.enemies.length===0) {
+    state.waveActive = false;
+    onWaveCleared();
+  }
+}
+function getWaveComposition(waveNum) {
+  if (waveNum % 10 === 0) {
+    const comp = ['boss'];
+    const escortCount = 3 + Math.floor(waveNum/10);
+    for (let i=0;i<escortCount;i++) comp.push(rng()<0.5 ? 'grunt' : 'runner');
+    return comp;
+  }
+  const isElite = waveNum % 5 === 0;
+  const count = 4 + Math.floor(waveNum*1.15);
+  const comp = [];
+  for (let i=0;i<count;i++) {
+    let pool = ['grunt'];
+    if (waveNum>=3) pool.push('runner');
+    if (waveNum>=5) pool.push('tank');
+    if (waveNum>=7) pool.push('shield');
+    if (isElite) pool = waveNum>=5 ? ['tank','shield'] : ['grunt','runner'];
+    comp.push(pool[Math.floor(rng()*pool.length)]);
+  }
+  return comp;
+}
+function beginWave() {
+  state.wave += 1;
+  state.keepHpAtWaveStart = state.keepHp;
+  updateWaveUI();
+  state.paused = false;
+  startWave(getWaveComposition(state.wave));
+  if (state.wave % 10 === 0) showBanner('BOSS WAVE', '#ff6b9d');
+  else if (state.wave % 5 === 0) showBanner('ELITE WAVE', '#ffd863');
+}
+function applyMetaToRunStart() {
+  state.keepMaxHp = 100 + sanctumLevel('startHp')*15;
+  state.keepHp = state.keepMaxHp;
+  state.gold = sanctumLevel('startGold')*15;
+  state.unlockedTowers = ['fire','frost'];
+  if (sanctumLevel('unlockLightning')>0) state.unlockedTowers.push('lightning');
+  if (sanctumLevel('unlockArcane')>0) state.unlockedTowers.push('arcane');
+  state.maxLevel = sanctumLevel('overmerge')>0 ? 7 : 5;
+  state.rareBonus = sanctumLevel('rareOdds')*0.08;
+}
+function resetRunState() {
+  for (const cell of cells) cell.tower = null;
+  state.enemies = []; state.projectiles = [];
+  state.spawnQueue = []; state.spawnTimer = 0; state.waveActive = false;
+  state.gameOver = false; state.paused = false;
+  state.wave = 0; state.relics = [];
+  state.mods = {
+    dmgMult:1, goldMult:1, rangeBonus:0, atkSpeedMult:1, mergeHealAmt:0, freeChance:0,
+    critChance:0, critMult:2.5, startLevel:1, damageTakenMult:1, healPerKill:0,
+    fireSplashMult:1, frostSlowBonus:0, lightningChainBonus:0, waveGoldBonus:0,
+  };
+  applyMetaToRunStart();
+  state.hand = rollHandPiece();
+  updateTrayUI(); updateGoldUI(); updateHpUI(); updateWaveUI(); updateRelicBarUI();
+  hint.classList.remove('hidden');
+}
+function computeEssenceEarned() {
+  const base = Math.floor(state.gold*0.12) + state.wave*3;
+  return Math.round(base * (1+sanctumLevel('essenceGain')*0.1));
+}
+function startRun(daily) {
+  resetRunState();
+  if (daily) {
+    const d = new Date();
+    const seedStr = d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
+    rngFunc = mulberry32(hashString(seedStr));
+    state.isDaily = true;
+    state.dailySeedStr = seedStr;
+  } else {
+    rngFunc = Math.random;
+    state.isDaily = false;
+  }
+  showScreen('game');
+  beginWave();
+}
+function onWaveCleared() {
+  let bonus = 8 + state.wave*2 + state.mods.waveGoldBonus;
+  const perfect = state.keepHp === state.keepHpAtWaveStart;
+  if (perfect) {
+    bonus += 10;
+    setTimeout(()=>showBanner('PERFECT WAVE +10', '#7dffb0'), 250);
+  }
+  state.gold += bonus;
+  updateGoldUI();
+  sfxWaveClear();
+  state.paused = true;
+  showRelicDraft();
+}
+function rollRelicChoices() {
+  const available = RELICS.filter(r => !(r.unique && state.relics.includes(r.id)));
+  const weighted = [];
+  for (const r of available) { const w = r.rare ? Math.round(1+state.rareBonus*8) : 3; for (let i=0;i<w;i++) weighted.push(r); }
+  const chosen = []; const seen = new Set();
+  while (chosen.length < 3 && weighted.length) {
+    const idx = Math.floor(rng()*weighted.length);
+    const r = weighted[idx];
+    if (!seen.has(r.id)) { seen.add(r.id); chosen.push(r); }
+    weighted.splice(idx,1);
+  }
+  return chosen;
+}
+function openModal(el) { el.classList.add('open'); }
+function closeModal(el) { el.classList.remove('open'); }
+function renderRelicOptions(choices) {
+  relicOptions.innerHTML = '';
+  for (const relic of choices) {
+    const card = document.createElement('div');
+    card.className = 'relicCard'+(relic.rare?' rare':'');
+    const gem = document.createElement('div');
+    gem.className = 'gem';
+    gem.style.background = `linear-gradient(135deg, ${rgbCss(relic.gem)}, rgba(255,255,255,0.6))`;
+    const info = document.createElement('div');
+    info.className = 'info';
+    info.innerHTML = `<div class="rname">${relic.name}${relic.rare?' ★':''}</div><div class="rdesc">${relic.desc}</div>`;
+    card.appendChild(gem); card.appendChild(info);
+    card.addEventListener('pointerup', () => pickRelic(relic));
+    relicOptions.appendChild(card);
+  }
+}
+function pickRelic(relic) {
+  relic.apply();
+  state.relics.push(relic.id);
+  updateRelicBarUI();
+  closeModal(relicModal);
+  sfxRelicPick();
+  showShop();
+}
+const SHOP_REROLL_COST = 8, SHOP_HEAL_COST = 12, SHOP_HEAL_AMOUNT = 18;
+function shopReroll() {
+  if (state.gold < SHOP_REROLL_COST) return;
+  state.gold -= SHOP_REROLL_COST;
+  state.hand = rollHandPiece();
+  updateGoldUI(); updateTrayUI(); updateShopUI();
+}
+function shopHeal() {
+  if (state.gold < SHOP_HEAL_COST || state.keepHp >= state.keepMaxHp) return;
+  state.gold -= SHOP_HEAL_COST;
+  state.keepHp = Math.min(state.keepMaxHp, state.keepHp+SHOP_HEAL_AMOUNT);
+  updateGoldUI(); updateHpUI(); updateShopUI();
+}
+function updateShopUI() {
+  shopTitle.textContent = 'Wave '+state.wave+' Cleared';
+  shopOptions.innerHTML = '';
+  const rerollBtn = document.createElement('button');
+  rerollBtn.className = 'shopBtn';
+  rerollBtn.innerHTML = `<span>Reroll hand piece</span><span class="cost">${SHOP_REROLL_COST}g</span>`;
+  rerollBtn.disabled = state.gold < SHOP_REROLL_COST;
+  rerollBtn.addEventListener('pointerup', shopReroll);
+  shopOptions.appendChild(rerollBtn);
+  const healBtn = document.createElement('button');
+  healBtn.className = 'shopBtn';
+  healBtn.innerHTML = `<span>Mend Keep (+${SHOP_HEAL_AMOUNT} HP)</span><span class="cost">${SHOP_HEAL_COST}g</span>`;
+  healBtn.disabled = state.gold < SHOP_HEAL_COST || state.keepHp >= state.keepMaxHp;
+  healBtn.addEventListener('pointerup', shopHeal);
+  shopOptions.appendChild(healBtn);
+}
+function showShop() {
+  updateShopUI();
+  openModal(shopModal);
+}
+function continueToNextWave() {
+  closeModal(shopModal);
+  beginWave();
+}
+function updateWaveUI() { wavePill.textContent = 'Wave '+state.wave; }
+function updateRelicBarUI() {
+  relicBar.innerHTML = '';
+  for (const id of state.relics) {
+    const relic = RELICS.find(r=>r.id===id);
+    if (!relic) continue;
+    const icon = document.createElement('div');
+    icon.className = 'relicIcon';
+    icon.title = relic.name+': '+relic.desc;
+    icon.style.background = `linear-gradient(135deg, ${rgbCss(relic.gem)}, rgba(255,255,255,0.6))`;
+    relicBar.appendChild(icon);
+  }
+}
+function showRelicDraft() {
+  renderRelicOptions(rollRelicChoices());
+  openModal(relicModal);
+}
+function triggerGameOver() {
+  state.gameOver = true;
+  sfxGameOver();
+  const essenceEarned = computeEssenceEarned();
+  save.essence += essenceEarned;
+  let isNewBest = false;
+  if (state.isDaily) {
+    const prev = save.dailyBest[state.dailySeedStr] || 0;
+    if (state.wave > prev) { save.dailyBest[state.dailySeedStr] = state.wave; isNewBest = true; }
+  } else if (state.wave > save.bestWave) {
+    save.bestWave = state.wave; isNewBest = true;
+  }
+  persistSave();
+  showSummary(essenceEarned, isNewBest);
+}
+function updateEnemies(dt) {
+  const last = pathList.length-1;
+  for (let i=state.enemies.length-1; i>=0; i--) {
+    const e = state.enemies[i];
+    if (e.slowTimer > 0) e.slowTimer -= dt;
+    const def = ENEMY_TYPES[e.type];
+    const speedMul = e.slowTimer>0 ? (1-e.slowFactor) : 1;
+    e.pathT += (def.speed*speedMul*dt)/CELL;
+    if (e.pathT >= last) {
+      const dmg = def.dmgToKeep*state.mods.damageTakenMult;
+      state.keepHp = Math.max(0, state.keepHp - dmg);
+      updateHpUI();
+      addShake(0.14);
+      sfxKeepHit();
+      spawnDamageNumber(cellWorld(keepCell[0],keepCell[1]), '-'+Math.round(dmg), null);
+      state.enemies.splice(i,1);
+      if (state.keepHp <= 0) triggerGameOver();
+    }
+  }
+}
+function damageEnemy(e, dmg) {
+  if (e.shield > 0) {
+    const absorbed = Math.min(e.shield, dmg);
+    e.shield -= absorbed;
+    dmg -= absorbed;
+  }
+  e.hp -= dmg;
+}
+function findTarget(tower) {
+  const towerPos = cellWorld(tower.col, tower.row);
+  const range = towerRange(tower);
+  let best = null, bestT = -1;
+  for (const e of state.enemies) {
+    if (e.hp <= 0) continue;
+    const ep = enemyWorldPos(e);
+    const dx=ep[0]-towerPos[0], dz=ep[2]-towerPos[2];
+    if (dx*dx+dz*dz <= range*range && e.pathT > bestT) { bestT = e.pathT; best = e; }
+  }
+  return best;
+}
+function fireAtTarget(tower, target) {
+  const towerPos = cellWorld(tower.col, tower.row);
+  const def = TOWER_TYPES[tower.type];
+  const isCrit = rng() < state.mods.critChance;
+  const dmg = towerDamage(tower) * (isCrit ? state.mods.critMult : 1);
+  state.projectiles.push({
+    x: towerPos[0], y: 0.5+tower.level*0.08, z: towerPos[2],
+    target, speed: 10,
+    color: def.gem,
+    dmg, isCrit,
+    towerType: tower.type,
+    splash: def.splash ? def.splash*state.mods.fireSplashMult : 0,
+    slowPct: def.slowPct ? Math.min(0.9, def.slowPct+state.mods.frostSlowBonus) : 0,
+    slowDur: def.slowDur,
+    chain: def.chain ? def.chain+state.mods.lightningChainBonus : 0,
+  });
+  sfxShoot(tower.type);
+}
+function applyImpact(p, impactPos) {
+  const primary = p.target;
+  damageEnemy(primary, p.dmg);
+  spawnDamageNumber(impactPos, Math.round(p.dmg)+(p.isCrit?'!':''), p.isCrit?'crit':null);
+  spawnParticles(impactPos, p.color, p.isCrit?10:5, {speed:1.6, upSpeed:1.8, life:0.35, size:0.06});
+  sfxHit();
+  if (p.towerType === 'frost') {
+    primary.slowFactor = p.slowPct;
+    primary.slowTimer = p.slowDur;
+  }
+  if (p.towerType === 'fire' && p.splash) {
+    for (const e of state.enemies) {
+      if (e===primary || e.hp<=0) continue;
+      const ep = enemyWorldPos(e);
+      const dx=ep[0]-impactPos[0], dz=ep[2]-impactPos[2];
+      if (dx*dx+dz*dz <= p.splash*p.splash) damageEnemy(e, p.dmg*0.55);
+    }
+  }
+  if (p.towerType === 'lightning' && p.chain > 1) {
+    const hitSet = new Set([primary]);
+    let lastPos = impactPos;
+    let curDmg = p.dmg;
+    for (let i=1;i<p.chain;i++) {
+      let best=null, bestDist=Infinity;
+      for (const e of state.enemies) {
+        if (hitSet.has(e) || e.hp<=0) continue;
+        const ep = enemyWorldPos(e);
+        const dx=ep[0]-lastPos[0], dz=ep[2]-lastPos[2];
+        const d2 = dx*dx+dz*dz;
+        if (d2 <= CHAIN_RANGE*CHAIN_RANGE && d2 < bestDist) { bestDist=d2; best=e; }
+      }
+      if (!best) break;
+      curDmg *= 0.7;
+      damageEnemy(best, curDmg);
+      hitSet.add(best);
+      lastPos = enemyWorldPos(best);
+    }
+  }
+}
+function updateTowers(dt) {
+  for (const cell of cells) {
+    const tower = cell.tower;
+    if (!tower) continue;
+    if (tower.cooldown === undefined) tower.cooldown = 0;
+    tower.cooldown -= dt;
+    if (tower.cooldown > 0) continue;
+    const target = findTarget(tower);
+    if (!target) continue;
+    fireAtTarget(tower, target);
+    tower.cooldown = 1/towerAtkSpeed(tower);
+  }
+}
+function updateProjectiles(dt) {
+  for (let i=state.projectiles.length-1; i>=0; i--) {
+    const p = state.projectiles[i];
+    const targetAlive = p.target && p.target.hp > 0;
+    const targetPos = targetAlive ? enemyWorldPos(p.target) : [p.x,0.3,p.z];
+    const tx=targetPos[0], ty=0.32, tz=targetPos[2];
+    const dx=tx-p.x, dy=ty-p.y, dz=tz-p.z;
+    const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+    const step = p.speed*dt;
+    if (!targetAlive || dist <= step) {
+      if (targetAlive) applyImpact(p, targetPos);
+      state.projectiles.splice(i,1);
+    } else {
+      p.x += dx/dist*step; p.y += dy/dist*step; p.z += dz/dist*step;
+    }
+  }
+}
+function addShake(amount) { state.shake = Math.min(0.6, state.shake+amount); }
+function spawnParticles(pos, color, count, opts) {
+  opts = opts || {};
+  const speed = opts.speed || 2.2;
+  const upSpeed = opts.upSpeed || 2.6;
+  const life = opts.life || 0.55;
+  const size = opts.size || 0.09;
+  for (let i=0;i<count;i++) {
+    const angle = Math.random()*Math.PI*2;
+    const spd = speed*(0.4+Math.random()*0.8);
+    state.particles.push({
+      x:pos[0], y:pos[1], z:pos[2],
+      vx:Math.cos(angle)*spd, vy:upSpeed*(0.5+Math.random()*0.7), vz:Math.sin(angle)*spd,
+      life:0, maxLife: life*(0.7+Math.random()*0.5), color, size,
+    });
+  }
+  if (state.particles.length > 260) state.particles.splice(0, state.particles.length-260);
+}
+function updateParticles(dt) {
+  for (let i=state.particles.length-1;i>=0;i--) {
+    const p = state.particles[i];
+    p.life += dt;
+    if (p.life >= p.maxLife) { state.particles.splice(i,1); continue; }
+    p.vy -= 6*dt;
+    p.x += p.vx*dt; p.y += p.vy*dt; p.z += p.vz*dt;
+    if (p.y < 0.02) { p.y = 0.02; p.vy *= -0.25; p.vx*=0.7; p.vz*=0.7; }
+  }
+}
+function cleanupDeadEnemies() {
+  for (let i=state.enemies.length-1; i>=0; i--) {
+    const e = state.enemies[i];
+    if (e.hp <= 0) {
+      const def = ENEMY_TYPES[e.type];
+      state.gold += Math.round(def.value * state.mods.goldMult);
+      updateGoldUI();
+      spawnParticles(enemyWorldPos(e), def.color, def.splitOnDeath?18:8, {speed:2.6, life:0.5});
+      if (state.mods.healPerKill > 0) {
+        state.keepHp = Math.min(state.keepMaxHp, state.keepHp + state.mods.healPerKill);
+        updateHpUI();
+      }
+      if (def.splitOnDeath) {
+        for (let k=0;k<2;k++) {
+          const shard = spawnEnemy('shard');
+          shard.pathT = e.pathT;
+          state.enemies.push(shard);
+        }
+      }
+      state.enemies.splice(i,1);
+    }
+  }
+}
+
+// ===================== camera =====================
+let aspect = 1;
+const BASE_FOV = 50*Math.PI/180;
+function getCameraParams() {
+  const halfExtent = (COLS*CELL)/2;
+  let dist = halfExtent*1.15/Math.tan(BASE_FOV/2);
+  if (aspect < 1) {
+    const t = clamp((1-aspect)/0.6, 0, 1);
+    dist *= lerp(1.0, 1.55, t);
+  }
+  const eye = [0, dist*0.86, dist*0.92];
+  const target = [0, 0, -CELL*0.3];
+  return {eye, target, up:[0,1,0], fov:BASE_FOV, dist};
+}
+function getCameraRay(cam, ndcX, ndcY) {
+  const forward = normalize3(sub3(cam.target, cam.eye));
+  const right = normalize3(cross3(forward, [0,1,0]));
+  const up2 = cross3(right, forward);
+  const halfH = Math.tan(cam.fov/2);
+  const halfW = halfH*aspect;
+  const dir = normalize3(add3(forward, add3(scale3(right, ndcX*halfW), scale3(up2, ndcY*halfH))));
+  return {origin: cam.eye, dir};
+}
+function rayGroundIntersect(ray) {
+  if (Math.abs(ray.dir[1]) < 1e-6) return null;
+  const t = -ray.origin[1]/ray.dir[1];
+  if (t < 0) return null;
+  return [ray.origin[0]+ray.dir[0]*t, 0, ray.origin[2]+ray.dir[2]*t];
+}
+function worldToCell(wx, wz) {
+  const col = Math.round(wx/CELL + (COLS-1)/2);
+  const row = Math.round(wz/CELL + (ROWS-1)/2);
+  return {col,row};
+}
+function screenToNDC(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (clientX-rect.left)/rect.width;
+  const y = (clientY-rect.top)/rect.height;
+  return [x*2-1, 1-y*2];
+}
+function raycastGround(clientX, clientY) {
+  if (!currentCam) return null;
+  const [ndcX,ndcY] = screenToNDC(clientX,clientY);
+  const ray = getCameraRay(currentCam, ndcX, ndcY);
+  return rayGroundIntersect(ray);
+}
+function pickCell(clientX, clientY) {
+  const hit = raycastGround(clientX, clientY);
+  if (!hit) return null;
+  const {col,row} = worldToCell(hit[0], hit[2]);
+  return getCellAt(col,row);
+}
+function resolveDrop(fromCell, tower, dropCell) {
+  if (!dropCell || dropCell.role !== 'buildable' || dropCell === fromCell) return false;
+  if (!dropCell.tower) {
+    tower.col = dropCell.col;
+    tower.row = dropCell.row;
+    dropCell.tower = tower;
+    fromCell.tower = null;
+    return true;
+  }
+  const other = dropCell.tower;
+  if (other.type === tower.type && other.level === tower.level && tower.level < state.maxLevel) {
+    other.level += 1;
+    if (!(state.mods.freeChance > 0 && rng() < state.mods.freeChance)) {
+      fromCell.tower = null;
+    }
+    if (state.mods.mergeHealAmt > 0) {
+      state.keepHp = Math.min(state.keepMaxHp, state.keepHp + state.mods.mergeHealAmt);
+      updateHpUI();
+    }
+    const mergePos = cellWorld(dropCell.col, dropCell.row);
+    mergePos[1] = 0.5;
+    spawnParticles(mergePos, TOWER_TYPES[other.type].gem, 12+other.level*2, {speed:1.8, upSpeed:3.2, life:0.6});
+    spawnDamageNumber(mergePos, 'Lv'+other.level+'!', 'crit');
+    sfxMerge(other.level);
+    return true;
+  }
+  return false;
+}
+
+// ===================== input =====================
+const TAP_MOVE_THRESHOLD = 12;
+const input = {
+  pointerId:null, downX:0, downY:0, moved:false,
+  hoverX:-1, hoverY:-1, hasHover:false,
+  dragTower:null, dragFromCell:null, isDragging:false,
+};
+function onPointerDown(e) {
+  e.preventDefault();
+  input.pointerId = e.pointerId;
+  input.downX = e.clientX; input.downY = e.clientY;
+  input.moved = false;
+  input.hoverX = e.clientX; input.hoverY = e.clientY; input.hasHover = true;
+  const cell = pickCell(e.clientX, e.clientY);
+  if (cell && cell.tower) {
+    input.dragTower = cell.tower;
+    input.dragFromCell = cell;
+  } else {
+    input.dragTower = null;
+    input.dragFromCell = null;
+  }
+  input.isDragging = false;
+}
+function onPointerMove(e) {
+  if (input.pointerId === e.pointerId) {
+    const dx=e.clientX-input.downX, dy=e.clientY-input.downY;
+    if (Math.hypot(dx,dy) > TAP_MOVE_THRESHOLD) {
+      input.moved = true;
+      if (input.dragTower) input.isDragging = true;
+    }
+  }
+  input.hoverX = e.clientX; input.hoverY = e.clientY; input.hasHover = true;
+}
+function onPointerUp(e) {
+  if (input.pointerId !== e.pointerId) return;
+  const dx=e.clientX-input.downX, dy=e.clientY-input.downY;
+  const isTap = Math.hypot(dx,dy) <= TAP_MOVE_THRESHOLD;
+  if (input.isDragging) {
+    const dropCell = pickCell(e.clientX, e.clientY);
+    resolveDrop(input.dragFromCell, input.dragTower, dropCell);
+  } else if (isTap) {
+    handleTap(e.clientX, e.clientY);
+  }
+  input.pointerId = null;
+  input.isDragging = false;
+  input.dragTower = null;
+  input.dragFromCell = null;
+}
+function onPointerLeave(e) {
+  if (input.pointerId === e.pointerId) {
+    input.pointerId = null;
+    input.isDragging = false;
+    input.dragTower = null;
+    input.dragFromCell = null;
+  }
+  input.hasHover = false;
+}
+function handleTap(clientX, clientY) {
+  const cell = pickCell(clientX, clientY);
+  if (!cell) return;
+  if (cell.role==='buildable' && !cell.tower && state.hand) {
+    placeTower(cell, state.hand);
+    state.hand = rollHandPiece();
+    updateTrayUI();
+    hint.classList.add('hidden');
+  }
+}
+canvas.addEventListener('pointerdown', onPointerDown, {passive:false});
+canvas.addEventListener('pointermove', onPointerMove, {passive:false});
+canvas.addEventListener('pointerup', onPointerUp, {passive:false});
+canvas.addEventListener('pointercancel', onPointerLeave, {passive:false});
+canvas.addEventListener('pointerleave', onPointerLeave, {passive:false});
+
+// ===================== hand tray UI =====================
+const handSlot = document.getElementById('handSlot');
+const handGem = document.getElementById('handGem');
+const handLevel = document.getElementById('handLevel');
+const handName = document.getElementById('handName');
+const hint = document.getElementById('hint');
+function rgbCss(c){ return `rgb(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)})`; }
+function updateTrayUI() {
+  const piece = state.hand;
+  if (!piece) { handSlot.style.visibility='hidden'; return; }
+  handSlot.style.visibility='visible';
+  const def = TOWER_TYPES[piece.type];
+  const css = rgbCss(def.gem);
+  handGem.style.background = `linear-gradient(135deg, ${rgbCss(def.color)}, ${css})`;
+  handGem.style.setProperty('--gemglow', css);
+  handLevel.textContent = 'Lv'+piece.level;
+  handName.textContent = def.name;
+}
+const hpBarFill = document.getElementById('hpBarFill');
+const hpText = document.getElementById('hpText');
+function updateHpUI() {
+  const pct = clamp(state.keepHp/state.keepMaxHp,0,1)*100;
+  hpBarFill.style.width = pct+'%';
+  hpText.textContent = Math.ceil(state.keepHp)+' / '+state.keepMaxHp;
+}
+const goldText = document.getElementById('goldText');
+function updateGoldUI() { goldText.textContent = state.gold; }
+const dmgLayer = document.getElementById('dmgLayer');
+function spawnDamageNumber(worldPos, text, kind) {
+  const screenPos = worldToScreenXY(worldPos[0], worldPos[2]);
+  const el = document.createElement('div');
+  el.className = 'dmgNum'+(kind?(' '+kind):'');
+  el.textContent = text;
+  el.style.left = screenPos.x+'px';
+  el.style.top = (screenPos.y - 30)+'px';
+  dmgLayer.appendChild(el);
+  requestAnimationFrame(()=>{ el.style.transform = 'translate(-50%,-160%)'; el.style.opacity = '0'; });
+  setTimeout(()=>el.remove(), 900);
+}
+const banner = document.getElementById('banner');
+let bannerTimeout = null;
+function showBanner(text, color) {
+  banner.textContent = text;
+  banner.style.color = color || '#fff';
+  banner.classList.add('show');
+  clearTimeout(bannerTimeout);
+  bannerTimeout = setTimeout(()=>banner.classList.remove('show'), 1400);
+}
+const wavePill = document.getElementById('wavePill');
+const relicBar = document.getElementById('relicBar');
+const relicModal = document.getElementById('relicModal');
+const relicOptions = document.getElementById('relicOptions');
+const shopModal = document.getElementById('shopModal');
+const shopTitle = document.getElementById('shopTitle');
+const shopOptions = document.getElementById('shopOptions');
+const continueBtn = document.getElementById('continueBtn');
+continueBtn.addEventListener('pointerup', continueToNextWave);
+
+// ===================== render =====================
+const _view = new Float32Array(16), _proj = new Float32Array(16), _viewProj = new Float32Array(16), _m = new Float32Array(16);
+let currentCam = null;
+
+function drawTower(tower, t, posOverride) {
+  const def = TOWER_TYPES[tower.type];
+  const lvl = tower.level;
+  let wx,wy,wz;
+  if (posOverride) { wx=posOverride[0]; wy=posOverride[1]; wz=posOverride[2]; }
+  else { const p = cellWorld(tower.col, tower.row); wx=p[0]; wy=0; wz=p[2]; }
+  const baseH = 0.34 + lvl*0.12;
+  const wobble = tower.col*1.7+tower.row*0.6;
+  mat4FromPosScale(_m, wx, wy+baseH/2, wz, 0.60, baseH, 0.60);
+  drawMesh(cubeMesh, _m, def.color);
+  if (lvl >= 2) {
+    mat4FromTRS(_m, wx, wy+baseH+0.26, wz, t*(0.4+lvl*0.1), 0.48+lvl*0.04, 0.52, 0.48+lvl*0.04);
+    drawMesh(coneMesh, _m, def.color);
+  }
+  const gemY = wy+baseH + (lvl>=2 ? 0.54 : 0.16) + Math.sin(t*1.8+wobble)*0.05;
+  const gemScale = 0.22 + lvl*0.045;
+  mat4FromTRS(_m, wx, gemY, wz, t*(1.1+lvl*0.3), gemScale,gemScale,gemScale);
+  drawMesh(octMesh, _m, def.gem);
+  if (lvl >= 4) {
+    const orbitR = 0.44;
+    const a = t*1.6+wobble;
+    mat4FromTRS(_m, wx+Math.cos(a)*orbitR, gemY, wz+Math.sin(a)*orbitR, a, 0.1,0.1,0.1);
+    drawMesh(octMesh, _m, def.gem);
+  }
+}
+
+function drawEnemy(e, t) {
+  const def = ENEMY_TYPES[e.type];
+  const [wx,,wz] = enemyWorldPos(e);
+  const bob = Math.sin(t*5+e.spawnBob)*0.05;
+  const bodyH = def.bodyH;
+  mat4FromPosScale(_m, wx, bodyH/2+bob, wz, def.bodyW, bodyH, def.bodyD);
+  drawMesh(cubeMesh, _m, def.color);
+  mat4FromPosScale(_m, wx, bodyH+0.11+bob, wz, def.bodyW*0.55, 0.2, def.bodyD*0.55);
+  drawMesh(cubeMesh, _m, def.color);
+  if (e.shield > 0) {
+    mat4FromTRS(_m, wx, bodyH*0.55+bob, wz, t*0.8, def.bodyW*0.9,def.bodyH*0.9,def.bodyD*0.9);
+    drawMesh(octMesh, _m, [0.55,0.65,1.0], 0.35);
+  }
+  const hpFrac = clamp(e.hp/e.maxHp, 0, 1);
+  const barY = bodyH+0.4+bob;
+  mat4FromPosScale(_m, wx, barY, wz, 0.5, 0.06, 0.06);
+  drawMesh(cubeMesh, _m, [0.08,0.08,0.1]);
+  mat4FromPosScale(_m, wx-0.25*(1-hpFrac), barY+0.002, wz, 0.5*hpFrac, 0.07, 0.065);
+  drawMesh(cubeMesh, _m, [0.85,0.2,0.2]);
+}
+
+function drawKeep(wx, wz, t) {
+  mat4FromPosScale(_m, wx, 0.55, wz, 0.68,1.1,0.68);
+  drawMesh(cubeMesh, _m, [0.40,0.27,0.60]);
+  mat4FromTRS(_m, wx, 1.1, wz, t*0.5, 0.8,0.95,0.8);
+  drawMesh(coneMesh, _m, [0.58,0.38,0.82]);
+  mat4FromTRS(_m, wx, 1.85+Math.sin(t*1.6)*0.08, wz, t*1.3, 0.34,0.34,0.34);
+  drawMesh(octMesh, _m, [1.0,0.86,0.4]);
+}
+
+function render(t) {
+  gl.viewport(0,0,canvas.width,canvas.height);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+
+  const cam = getCameraParams();
+  cam.eye[0] += Math.sin(t*0.12)*0.12;
+  if (state.shake > 0.001) {
+    cam.eye[0] += (Math.random()-0.5)*state.shake*0.7;
+    cam.eye[1] += (Math.random()-0.5)*state.shake*0.4;
+    cam.eye[2] += (Math.random()-0.5)*state.shake*0.7;
+  }
+  currentCam = cam;
+  mat4LookAt(_view, cam.eye, cam.target, cam.up);
+  mat4Perspective(_proj, cam.fov, aspect, 0.1, 100);
+  mat4Multiply(_viewProj, _proj, _view);
+  gl.uniformMatrix4fv(loc.uViewProj, false, _viewProj);
+  gl.uniform3fv(loc.uCameraPos, cam.eye);
+  gl.uniform3fv(loc.uLightDir, normalize3([0.4,-0.85,0.32]));
+  gl.uniform3fv(loc.uFogColor, [0.045,0.04,0.075]);
+  gl.uniform1f(loc.uFogNear, cam.dist*0.55);
+  gl.uniform1f(loc.uFogFar, cam.dist*1.9);
+
+  let hoverCell = null;
+  if (input.hasHover) hoverCell = pickCell(input.hoverX, input.hoverY);
+
+  const pulse = 0.5+0.5*Math.sin(t*2.6);
+  for (const cell of cells) {
+    const [wx,,wz] = cellWorld(cell.col,cell.row);
+    let color, h;
+    if (cell.role==='path') { color=[0.34,0.28,0.24]; h=0.16; }
+    else if (cell.role==='keep') { color=[0.30,0.22,0.42]; h=0.42; }
+    else {
+      color=[0.27,0.30,0.39]; h=0.24;
+      if (input.isDragging && cell===hoverCell && cell!==input.dragFromCell) {
+        let valid;
+        if (!cell.tower) valid = true;
+        else valid = (cell.tower.type===input.dragTower.type && cell.tower.level===input.dragTower.level && cell.tower.level < state.maxLevel);
+        color = valid ? [0.95,0.85,0.25] : [0.85,0.25,0.25];
+        h += 0.08;
+      } else if (!cell.tower && state.hand && !input.isDragging) {
+        const isHover = hoverCell===cell;
+        const glow = isHover ? 0.85 : pulse*0.35;
+        color = [ lerp(color[0],0.35,glow), lerp(color[1],0.95,glow), lerp(color[2],0.45,glow) ];
+        if (isHover) h += 0.06;
+      }
+    }
+    mat4FromPosScale(_m, wx, h/2, wz, CELL*0.88, h, CELL*0.88);
+    drawMesh(cubeMesh, _m, color);
+  }
+  const [kwx,,kwz] = cellWorld(keepCell[0], keepCell[1]);
+  drawKeep(kwx, kwz, t);
+  for (const cell of cells) {
+    if (cell.tower && cell.tower !== input.dragTower) drawTower(cell.tower, t);
+  }
+  if (input.isDragging && input.dragTower) {
+    const gp = raycastGround(input.hoverX, input.hoverY) || cellWorld(input.dragFromCell.col, input.dragFromCell.row);
+    const liftY = 0.55 + Math.sin(t*6)*0.04;
+    mat4FromPosScale(_m, gp[0], 0.03, gp[2], 0.55,0.05,0.55);
+    drawMesh(cubeMesh, _m, [0,0,0], 0.32);
+    drawTower(input.dragTower, t, [gp[0], liftY, gp[2]]);
+  }
+  for (const e of state.enemies) drawEnemy(e, t);
+  for (const p of state.projectiles) {
+    mat4FromPosScale(_m, p.x, p.y, p.z, 0.16,0.16,0.16);
+    drawMesh(octMesh, _m, p.color);
+  }
+  for (const p of state.particles) {
+    const alpha = clamp(1-(p.life/p.maxLife), 0, 1);
+    const s = p.size*(0.5+alpha*0.5);
+    mat4FromPosScale(_m, p.x, p.y, p.z, s,s,s);
+    drawMesh(cubeMesh, _m, p.color, alpha);
+  }
+}
+
+function update(dt, t) {
+  state.shake = Math.max(0, state.shake - dt*1.4);
+  updateParticles(dt);
+  if (state.gameOver || state.paused) return;
+  updateWave(dt);
+  updateTowers(dt);
+  updateProjectiles(dt);
+  updateEnemies(dt);
+  cleanupDeadEnemies();
+}
+
+// ===================== screens & menus =====================
+const hud = document.getElementById('hud');
+const screenEls = {
+  mainMenu: document.getElementById('screenMainMenu'),
+  sanctum: document.getElementById('screenSanctum'),
+  howTo: document.getElementById('screenHowTo'),
+  summary: document.getElementById('screenSummary'),
+};
+function showScreen(name) {
+  state.screen = name;
+  for (const key in screenEls) screenEls[key].classList.toggle('active', key===name);
+  hud.style.display = (name==='game') ? '' : 'none';
+}
+function updateMainMenuStats() {
+  document.getElementById('menuBestWave').textContent = save.bestWave;
+  document.getElementById('menuEssence').textContent = save.essence;
+}
+function renderSanctum() {
+  document.getElementById('sanctumEssence').textContent = save.essence;
+  const list = document.getElementById('sanctumList');
+  list.innerHTML = '';
+  for (const upg of SANCTUM_UPGRADES) {
+    const lvl = sanctumLevel(upg.id);
+    const maxed = lvl >= upg.maxLevel;
+    const cost = sanctumCost(upg);
+    const row = document.createElement('div');
+    row.className = 'sanctumRow';
+    const levelTag = upg.maxLevel>1 ? `<span class="sLevel">Lv ${lvl}/${upg.maxLevel}</span>` : (maxed?'<span class="sLevel">Owned</span>':'');
+    row.innerHTML = `<div class="sInfo"><div class="sName">${upg.name}${levelTag}</div><div class="sDesc">${upg.desc}</div></div><button class="buyBtn" ${(maxed||save.essence<cost)?'disabled':''}>${maxed?'MAX':cost+' E'}</button>`;
+    if (!maxed) row.querySelector('.buyBtn').addEventListener('pointerup', () => buySanctumUpgrade(upg));
+    list.appendChild(row);
+  }
+}
+function showSummary(essenceEarned, isNewBest) {
+  document.getElementById('summaryWave').textContent = state.wave;
+  document.getElementById('summaryGold').textContent = state.gold;
+  document.getElementById('summaryEssence').textContent = essenceEarned;
+  document.getElementById('summaryTitle').textContent = state.isDaily ? 'Daily Run Ended' : 'Keep Fallen';
+  document.getElementById('summaryNewBest').classList.toggle('hidden', !isNewBest);
+  showScreen('summary');
+}
+document.getElementById('btnStartRun').addEventListener('pointerup', ()=>startRun(false));
+document.getElementById('btnDaily').addEventListener('pointerup', ()=>startRun(true));
+document.getElementById('btnSanctum').addEventListener('pointerup', ()=>{ renderSanctum(); showScreen('sanctum'); });
+document.getElementById('btnHowTo').addEventListener('pointerup', ()=>showScreen('howTo'));
+document.getElementById('btnHowToBack').addEventListener('pointerup', ()=>showScreen('mainMenu'));
+document.getElementById('btnSanctumBack').addEventListener('pointerup', ()=>{ updateMainMenuStats(); showScreen('mainMenu'); });
+document.getElementById('btnPlayAgain').addEventListener('pointerup', ()=>startRun(state.isDaily));
+document.getElementById('btnSummaryMenu').addEventListener('pointerup', ()=>{ updateMainMenuStats(); showScreen('mainMenu'); });
+document.getElementById('btnReset').addEventListener('pointerup', ()=>{
+  if (confirm('Reset ALL progress? This cannot be undone.')) {
+    save = defaultSave();
+    persistSave();
+    updateMainMenuStats();
+  }
+});
+resetRunState();
+updateMainMenuStats();
+showScreen('mainMenu');
+
+// ===================== resize =====================
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  const w = window.innerWidth, h = window.innerHeight;
+  canvas.width = Math.max(1,Math.floor(w*dpr));
+  canvas.height = Math.max(1,Math.floor(h*dpr));
+  canvas.style.width = w+'px';
+  canvas.style.height = h+'px';
+  aspect = w/h;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', resize);
+resize();
+
+// ===================== main loop =====================
+let lastTime = 0;
+function frame(now) {
+  const t = now/1000;
+  const dt = lastTime ? Math.min((now-lastTime)/1000, 0.05) : 0;
+  lastTime = now;
+  update(dt, t);
+  render(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function worldToScreenXY(wx, wz) {
+  const m = _viewProj;
+  const x = m[0]*wx + m[8]*wz + m[12];
+  const y = m[1]*wx + m[9]*wz + m[13];
+  const w = m[3]*wx + m[11]*wz + m[15];
+  const ndcX = x/w, ndcY = y/w;
+  const rect = canvas.getBoundingClientRect();
+  return { x: rect.left + (ndcX*0.5+0.5)*rect.width, y: rect.top + (1-(ndcY*0.5+0.5))*rect.height };
+}
+window.__game = { cells, pathList, keepCell, COLS, ROWS, CELL, getCellAt, cellWorld, worldToScreenXY, state, TOWER_TYPES, ENEMY_TYPES, input, startWave, enemyWorldPos, towerDamage, towerRange, towerAtkSpeed, spawnEnemy, findTarget, fireAtTarget, applyImpact, updateProjectiles, updateTowers, RELICS, beginWave, getWaveComposition, rollRelicChoices, pickRelic, shopReroll, shopHeal, continueToNextWave, onWaveCleared, cleanupDeadEnemies,
+  get save(){return save;}, loadSave, persistSave, SANCTUM_UPGRADES, sanctumLevel, sanctumCost, buySanctumUpgrade,
+  startRun, triggerGameOver, showScreen, resetRunState, computeEssenceEarned, mulberry32, hashString, rng };
+})();
+</script>
+</body>
+</html>
